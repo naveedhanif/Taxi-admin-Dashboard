@@ -1,0 +1,8 @@
+{
+  "name": "Supabase Taxi SaaS Schema",
+  "description": "SQL schema for a multi-tenant B2B2C SaaS application for independent taxi drivers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
+
+.emboss-btn {
+  background: #F0EEE7;
+  border: none;
+  box-shadow: 3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85);
+  transition: box-shadow 0.12s ease, transform 0.08s ease;
+}
+.emboss-btn:active {
+  box-shadow: inset 2px 2px 4px rgba(44,44,42,0.18), inset -2px -2px 4px rgba(255,255,255,0.7);
+  transform: translateY(1px);
+}
+.emboss-btn-primary {
+  background: #185FA5;
+  border: none;
+  box-shadow: 3px 3px 7px rgba(4,44,83,0.35), -2px -2px 5px rgba(133,183,235,0.55);
+  transition: box-shadow 0.12s ease, transform 0.08s ease;
+}
+.emboss-btn-primary:active {
+  box-shadow: inset 2px 2px 5px rgba(4,44,83,0.5), inset -2px -2px 4px rgba(133,183,235,0.35);
+  transform: translateY(1px);
+}
+.emboss-toggle-on {
+  background: #EAF3DE;
+  border: none;
+  box-shadow: 2px 2px 5px rgba(59,109,17,0.22), -2px -2px 5px rgba(255,255,255,0.8);
+  transition: box-shadow 0.12s ease, transform 0.08s ease;
+}
+.emboss-toggle-off {
+  background: #F0EEE7;
+  border: none;
+  box-shadow: 3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85);
+  transition: box-shadow 0.12s ease, transform 0.08s ease;
+}
+.emboss-input {
+  background: #FFFFFF;
+  border: 1px solid #E4E2DA;
+  box-shadow: inset 1px 1px 3px rgba(44,44,42,0.08);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.emboss-input:focus {
+  outline: none;
+  border-color: #185FA5;
+  box-shadow: inset 1px 1px 3px rgba(44,44,42,0.08), 0 0 0 2px rgba(24,95,165,0.15);
+}
+
+@keyframes animateRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-entrance {
+  animation: animateRise 300ms ease-out forwards;
+}
