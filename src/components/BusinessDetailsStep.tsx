@@ -1,6 +1,7 @@
 import type React from "react";
 import { useState, useEffect } from "react";
-import { Building2, Phone, Globe, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Building2, Phone, Globe, ArrowRight, CheckCircle2, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+import { signUpDriver } from "../driverAuth";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -100,7 +101,7 @@ function RecessedField({ icon: Icon, ...props }: any) {
 }
 
 interface BusinessDetailsStepProps {
-  onNext?: (data: { businessName: string; phone: string; slug: string }) => void;
+  onNext?: (data: { businessName: string; phone: string; slug: string; driverId: string }) => void;
   initialBusinessName?: string;
   initialPhone?: string;
 }
@@ -113,6 +114,10 @@ export default function BusinessDetailsStep({
   useGoogleFont();
   const [businessName, setBusinessName] = useState(initialBusinessName);
   const [phone, setPhone] = useState(initialPhone);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const generateSlug = (name: string) => {
     return name
@@ -125,10 +130,22 @@ export default function BusinessDetailsStep({
 
   const slug = generateSlug(businessName);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (onNext) {
-      onNext({ businessName, phone, slug });
+    setErrorMessage("");
+    setSubmitting(true);
+
+    const result = await signUpDriver({ email, password, businessName, phone, bookingSlug: slug });
+
+    setSubmitting(false);
+
+    if (result.error) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    if (onNext && result.driverId) {
+      onNext({ businessName, phone, slug, driverId: result.driverId });
     }
   };
 
@@ -181,6 +198,35 @@ export default function BusinessDetailsStep({
               />
             </div>
 
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-[#2C2C2A]">
+                Login Email
+              </label>
+              <RecessedField
+                icon={Mail}
+                type="email"
+                required
+                value={email}
+                onChange={(e: any) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-[#2C2C2A]">
+                Password
+              </label>
+              <RecessedField
+                icon={Lock}
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e: any) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+              />
+            </div>
+
             {/* Live Slug Preview Card */}
             <div
               className="mt-6 rounded-xl p-4 text-xs transition-all"
@@ -206,13 +252,29 @@ export default function BusinessDetailsStep({
               </p>
             </div>
 
+            {errorMessage && (
+              <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                <AlertCircle size={14} /> {errorMessage}
+              </div>
+            )}
+
             <div className="pt-4">
               <button
                 type="submit"
-                className="emboss-btn-primary flex w-full items-center justify-center gap-2 rounded-full py-3 text-xs font-semibold uppercase tracking-wider text-white cursor-pointer"
+                disabled={submitting}
+                className="emboss-btn-primary flex w-full items-center justify-center gap-2 rounded-full py-3 text-xs font-semibold uppercase tracking-wider text-white cursor-pointer disabled:opacity-60"
               >
-                <span>Continue to Stripe Setup</span>
-                <ArrowRight size={14} />
+                {submitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Creating your account...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Continue to Stripe Setup</span>
+                    <ArrowRight size={14} />
+                  </>
+                )}
               </button>
             </div>
           </form>

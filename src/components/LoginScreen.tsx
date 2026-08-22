@@ -1,6 +1,7 @@
 import type React from "react";
 import { useState, useEffect } from "react";
-import { Mail, Lock, ArrowRight, CheckCircle2, Car, KeyRound } from "lucide-react";
+import { Mail, Lock, ArrowRight, CheckCircle2, Car, KeyRound, AlertCircle } from "lucide-react";
+import { signInDriver, signInWithMagicLink } from "../driverAuth";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -67,21 +68,43 @@ function EmbossStyles() {
   );
 }
 
-export default function LoginScreen() {
+export default function LoginScreen({ onLoginSuccess }: { onLoginSuccess?: (driverId: string) => void }) {
   useGoogleFont();
   const [authMode, setAuthMode] = useState<"password" | "magic_link">("password");
-  const [email, setEmail] = useState("john.driver@example.com");
-  const [password, setPassword] = useState("••••••••••••");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage("");
     setIsLoading(true);
-    setTimeout(() => {
+
+    if (authMode === "magic_link") {
+      const { error } = await signInWithMagicLink(email);
       setIsLoading(false);
+      if (error) {
+        setErrorMessage(error);
+        return;
+      }
       setIsSuccess(true);
-    }, 1000);
+      return;
+    }
+
+    const result = await signInDriver(email, password);
+    setIsLoading(false);
+
+    if (result.error) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    setIsSuccess(true);
+    if (onLoginSuccess && result.driverId) {
+      onLoginSuccess(result.driverId);
+    }
   };
 
   return (
@@ -187,6 +210,12 @@ export default function LoginScreen() {
                       />
                       <Lock size={14} className="absolute left-3 top-3 text-[#B4B2A9]" />
                     </div>
+                  </div>
+                )}
+
+                {errorMessage && (
+                  <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                    <AlertCircle size={14} /> {errorMessage}
                   </div>
                 )}
 

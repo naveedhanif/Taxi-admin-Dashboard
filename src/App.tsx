@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import StepProgressIndicator from "./components/StepProgressIndicator";
 import BusinessDetailsStep from "./components/BusinessDetailsStep";
 import StripeConnectStep from "./components/StripeConnectStep";
@@ -15,6 +15,8 @@ import StripeOnboardingScreen from "./components/StripeOnboardingScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
+import { supabase } from "./supabaseClient";
+import { getDriverForUser } from "./driverAuth";
 
 import { LayoutDashboard, Compass, LogIn, Calendar, Settings2, Car, CreditCard } from "lucide-react";
 
@@ -23,10 +25,24 @@ export default function App() {
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
   const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "fare_rules" | "vehicle" | "stripe">("overview");
 
-  // TODO: replace with the real logged-in driver's id once real Auth is
-  // built — until then this stays null and the notification hook simply
-  // does nothing (no subscription is created without a real driverId).
-  const [driverId] = useState<string | null>(null);
+  // Real session tracking. onAuthStateChange fires immediately with the
+  // current session on load, then again on every sign-in/sign-out — this
+  // is the one source of truth for "who's logged in right now."
+  const [driverId, setDriverId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const result = await getDriverForUser(session.user.id);
+        setDriverId(result.driverId);
+      } else {
+        setDriverId(null);
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
   const { notifications, dismiss } = useNewBookingNotifications(driverId);
 
   const navigationItems = [
@@ -150,7 +166,11 @@ export default function App() {
             </div>
 
             {dashboardScreen === "overview" && <OverviewDashboard onNavigate={(s) => setDashboardScreen(s as any)} />}
-            {dashboardScreen === "login" && <LoginScreen />}
+            {dashboardScreen === "login" && (
+              <LoginScreen
+                onLoginSuccess={() => setDashboardScreen("overview")}
+              />
+            )}
             {dashboardScreen === "bookings" && <AllBookingsScreen />}
             {dashboardScreen === "fare_rules" && <FareRulesScreen />}
             {dashboardScreen === "vehicle" && <VehicleInfoScreen />}
