@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { CreditCard, DollarSign, ArrowRight, ShieldCheck, Banknote, RefreshCw } from "lucide-react";
 
@@ -215,3 +216,4 @@ export default function StripeConnectStep({ onNext, onSkip }: StripeConnectStepP
     </div>
   );
 }
+

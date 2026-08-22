@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Check, Shield, ArrowRight, Zap, Award } from "lucide-react";
 
@@ -179,3 +180,4 @@ export default function SubscriptionPlanStep({ onNext }: SubscriptionPlanStepPro
     </div>
   );
 }
+

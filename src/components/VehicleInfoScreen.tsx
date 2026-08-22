@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Car, ShieldCheck, Check, Save, Fuel, Users, Hash, Palette } from "lucide-react";
 
@@ -224,15 +225,28 @@ export default function VehicleInfoScreen() {
 
               <div>
                 <label className="mb-1 block font-medium text-[#2C2C2A]">Passenger Seats</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  required
-                  value={vehicle.seats}
-                  onChange={(e) => setVehicle({ ...vehicle, seats: parseInt(e.target.value) || 4 })}
-                  className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                />
+                <div className="grid grid-cols-3 gap-2">
+                  {[4, 6, 9].map((option) => {
+                    const isActive = vehicle.seats === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setVehicle({ ...vehicle, seats: option })}
+                        className="rounded-lg py-2 text-xs font-semibold transition-all"
+                        style={{
+                          background: isActive ? "#185FA5" : "#F0EEE7",
+                          color: isActive ? "#FFFFFF" : "#2C2C2A",
+                          boxShadow: isActive
+                            ? "inset 2px 2px 4px rgba(4,44,83,0.4), inset -2px -2px 3px rgba(133,183,235,0.3)"
+                            : "2px 2px 5px rgba(44,44,42,0.14), -2px -2px 5px rgba(255,255,255,0.85)",
+                        }}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -287,3 +301,4 @@ export default function VehicleInfoScreen() {
     </div>
   );
 }
+

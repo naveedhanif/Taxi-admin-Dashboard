@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Euro, Tag, ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 
@@ -266,3 +267,4 @@ export default function FareRulesSetupStep({ onComplete }: FareRulesSetupStepPro
     </div>
   );
 }
+

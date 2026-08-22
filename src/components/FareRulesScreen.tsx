@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, Check, ShieldCheck, HelpCircle } from "lucide-react";
 
@@ -353,3 +354,4 @@ export default function FareRulesScreen() {
     </div>
   );
 }
+

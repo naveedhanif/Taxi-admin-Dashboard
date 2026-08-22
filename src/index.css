@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
 
 .emboss-btn {
   background: #F0EEE7;
@@ -59,3 +59,4 @@
 .animate-entrance {
   animation: animateRise 300ms ease-out forwards;
 }
+

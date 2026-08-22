@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Building2, Phone, Globe, ArrowRight, CheckCircle2 } from "lucide-react";
 
@@ -220,3 +221,4 @@ export default function BusinessDetailsStep({
     </div>
   );
 }
+

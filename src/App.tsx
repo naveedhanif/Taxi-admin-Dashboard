@@ -13,12 +13,21 @@ import FareRulesScreen from "./components/FareRulesScreen";
 import VehicleInfoScreen from "./components/VehicleInfoScreen";
 import StripeOnboardingScreen from "./components/StripeOnboardingScreen";
 
+import NotificationToast from "./NotificationToast";
+import { useNewBookingNotifications } from "./useNewBookingNotifications";
+
 import { LayoutDashboard, Compass, LogIn, Calendar, Settings2, Car, CreditCard } from "lucide-react";
 
 export default function App() {
   const [viewMode, setViewMode] = useState<"onboarding" | "dashboard">("onboarding");
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
   const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "fare_rules" | "vehicle" | "stripe">("overview");
+
+  // TODO: replace with the real logged-in driver's id once real Auth is
+  // built — until then this stays null and the notification hook simply
+  // does nothing (no subscription is created without a real driverId).
+  const [driverId] = useState<string | null>(null);
+  const { notifications, dismiss } = useNewBookingNotifications(driverId);
 
   const navigationItems = [
     { id: "overview", label: "Dashboard", icon: LayoutDashboard },
@@ -31,6 +40,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] text-[#2C2C2A] font-sans antialiased">
+      <NotificationToast notifications={notifications} onDismiss={dismiss} />
+
       {/* Navigation Header */}
       <header className="sticky top-0 z-40 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 backdrop-blur-md px-4 py-3">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -150,3 +161,4 @@ export default function App() {
     </div>
   );
 }
+

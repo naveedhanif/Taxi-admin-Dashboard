@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Car, Hash, Palette, Users, ArrowRight } from "lucide-react";
 
@@ -193,15 +194,32 @@ export default function VehicleSetupStep({ onNext, onSkip }: VehicleSetupStepPro
 
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-[#2C2C2A]">Passenger Seats</label>
-              <RecessedField
-                icon={Users}
-                type="number"
-                min={1}
-                max={8}
-                required
-                value={seats}
-                onChange={(e: any) => setSeats(parseInt(e.target.value) || 4)}
-              />
+              <div className="grid grid-cols-3 gap-2.5">
+                {[4, 6, 9].map((option) => {
+                  const isActive = seats === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setSeats(option)}
+                      className="flex flex-col items-center gap-1 rounded-xl py-3 transition-all"
+                      style={{
+                        background: isActive ? "#185FA5" : "#F0EEE7",
+                        color: isActive ? "#FFFFFF" : "#2C2C2A",
+                        boxShadow: isActive
+                          ? "inset 2px 2px 5px rgba(4,44,83,0.4), inset -2px -2px 4px rgba(133,183,235,0.3)"
+                          : "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)",
+                      }}
+                    >
+                      <Users size={16} color={isActive ? "#FFFFFF" : "#8C8977"} />
+                      <span className="text-sm font-semibold">{option}</span>
+                      <span className="text-[10px]" style={{ color: isActive ? "#DCEBFA" : "#8C8977" }}>
+                        seats
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="pt-4 space-y-3">
@@ -227,3 +245,4 @@ export default function VehicleSetupStep({ onNext, onSkip }: VehicleSetupStepPro
     </div>
   );
 }
+

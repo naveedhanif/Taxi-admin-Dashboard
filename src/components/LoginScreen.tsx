@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Mail, Lock, ArrowRight, CheckCircle2, Car, KeyRound } from "lucide-react";
 
@@ -216,3 +217,4 @@ export default function LoginScreen() {
     </div>
   );
 }
+
