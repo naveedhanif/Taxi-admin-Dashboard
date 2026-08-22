@@ -165,7 +165,7 @@ export default function App() {
               })}
             </div>
 
-            {dashboardScreen === "overview" && <OverviewDashboard onNavigate={(s) => setDashboardScreen(s as any)} />}
+            {dashboardScreen === "overview" && <OverviewDashboard driverId={driverId} onNavigate={(s) => setDashboardScreen(s as any)} />}
             {dashboardScreen === "login" && (
               <LoginScreen
                 onLoginSuccess={() => setDashboardScreen("overview")}

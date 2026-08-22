@@ -1,28 +1,7 @@
 import { useState, useEffect } from "react";
 import { MapPin, Plus, Settings, TrendingUp, Circle, Car } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from "recharts";
-
-const bookings = [
-  { id: 1, name: "Sarah Kelly", time: "14:20", pickup: "Grafton St", drop: "Dublin Airport", status: "confirmed" },
-  { id: 2, name: "Tom Byrne", time: "15:05", pickup: "St. Stephen's Green", drop: "Ballsbridge", status: "pending" },
-  { id: 3, name: "Aoife Ryan", time: "16:40", pickup: "Temple Bar", drop: "Dun Laoghaire", status: "confirmed" },
-  { id: 4, name: "Michael Doyle", time: "18:15", pickup: "IFSC", drop: "Malahide", status: "pending" },
-];
-
-const weeklyEarnings = [
-  { day: "Wed", amount: 96 },
-  { day: "Thu", amount: 112 },
-  { day: "Fri", amount: 154 },
-  { day: "Sat", amount: 189 },
-  { day: "Sun", amount: 121 },
-  { day: "Mon", amount: 88 },
-  { day: "Tue", amount: 138 },
-];
-
-const statusBreakdown = [
-  { name: "Confirmed", value: 2, color: "#639922" },
-  { name: "Pending", value: 2, color: "#BA7517" },
-];
+import { supabase } from "../supabaseClient";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -95,8 +74,13 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
 
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, { bg: string; text: string; label: string }> = {
-    confirmed: { bg: "#EAF3DE", text: "#27500A", label: "Confirmed" },
     pending: { bg: "#FAEEDA", text: "#633806", label: "Pending" },
+    confirmed: { bg: "#EAF3DE", text: "#27500A", label: "Confirmed" },
+    en_route: { bg: "#E6F1FB", text: "#0C447C", label: "En route" },
+    arrived: { bg: "#E6F1FB", text: "#0C447C", label: "Arrived" },
+    in_progress: { bg: "#E6F1FB", text: "#0C447C", label: "In progress" },
+    completed: { bg: "#F1EFE8", text: "#5F5E5A", label: "Completed" },
+    canceled: { bg: "#FCEBEB", text: "#791F1F", label: "Canceled" },
   };
   const s = map[status] || { bg: "#F1EFE8", text: "#2C2C2A", label: status };
   return (
@@ -106,9 +90,150 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-export default function OverviewDashboard({ onNavigate }: { onNavigate?: (screen: string) => void }) {
+interface Booking {
+  id: string;
+  passenger_name: string;
+  pickup_address: string;
+  dropoff_address: string;
+  scheduled_time: string;
+  status: string;
+  estimated_fare: number;
+  final_fare: number | null;
+}
+
+function startOfDay(d: Date) {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const ACTIVE_TRIP_STATUSES = ["en_route", "arrived", "in_progress"];
+
+export default function OverviewDashboard({ driverId, onNavigate }: { driverId: string | null; onNavigate?: (screen: string) => void }) {
   useGoogleFont();
+  const [businessName, setBusinessName] = useState("");
   const [online, setOnline] = useState(true);
+  const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
+  const [weeklyEarnings, setWeeklyEarnings] = useState<{ day: string; amount: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function loadDashboardData() {
+    if (!driverId) return;
+
+    const { data: driver } = await supabase
+      .from("drivers")
+      .select("business_name, is_active")
+      .eq("id", driverId)
+      .single();
+    if (driver) {
+      setBusinessName(driver.business_name);
+      setOnline(driver.is_active);
+    }
+
+    const todayStart = startOfDay(new Date());
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const { data: todayData } = await supabase
+      .from("bookings")
+      .select("id, passenger_name, pickup_address, dropoff_address, scheduled_time, status, estimated_fare, final_fare")
+      .eq("driver_id", driverId)
+      .gte("scheduled_time", todayStart.toISOString())
+      .lt("scheduled_time", todayEnd.toISOString())
+      .order("scheduled_time");
+    setTodayBookings(todayData ?? []);
+
+    // Last 7 days of completed bookings, grouped by day for the earnings chart
+    const weekAgo = new Date(todayStart);
+    weekAgo.setDate(weekAgo.getDate() - 6);
+    const { data: weekData } = await supabase
+      .from("bookings")
+      .select("scheduled_time, final_fare, estimated_fare, status")
+      .eq("driver_id", driverId)
+      .eq("status", "completed")
+      .gte("scheduled_time", weekAgo.toISOString());
+
+    const byDay: Record<string, number> = {};
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekAgo);
+      d.setDate(d.getDate() + i);
+      byDay[DAY_LABELS[d.getDay()]] = 0;
+    }
+    (weekData ?? []).forEach((b) => {
+      const day = DAY_LABELS[new Date(b.scheduled_time).getDay()];
+      const amount = b.final_fare ?? b.estimated_fare ?? 0;
+      byDay[day] = (byDay[day] ?? 0) + Number(amount);
+    });
+    setWeeklyEarnings(Object.entries(byDay).map(([day, amount]) => ({ day, amount: Math.round(amount) })));
+
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadDashboardData();
+
+    if (!driverId) return;
+
+    // Real-time: refresh whenever a booking for this driver changes
+    // (new booking arrives, status changes, etc.) — the notification
+    // toast is a separate concern (see useNewBookingNotifications);
+    // this keeps the dashboard's own numbers in sync too.
+    const channel = supabase
+      .channel(`dashboard-bookings-${driverId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `driver_id=eq.${driverId}` },
+        () => loadDashboardData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driverId]);
+
+  async function handleToggleOnline() {
+    const newValue = !online;
+    setOnline(newValue); // optimistic update
+    if (driverId) {
+      await supabase.from("drivers").update({ is_active: newValue }).eq("id", driverId);
+    }
+  }
+
+  const ridesTodayCount = todayBookings.length;
+  const earningsToday = todayBookings
+    .filter((b) => b.status === "completed")
+    .reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
+  const activeTrip = todayBookings.find((b) => ACTIVE_TRIP_STATUSES.includes(b.status));
+  const nextUpcoming = todayBookings.find((b) => b.status === "pending" || b.status === "confirmed");
+
+  const statusCounts: Record<string, number> = {};
+  todayBookings.forEach((b) => {
+    statusCounts[b.status] = (statusCounts[b.status] ?? 0) + 1;
+  });
+  const statusColors: Record<string, string> = {
+    confirmed: "#639922",
+    pending: "#BA7517",
+    en_route: "#185FA5",
+    completed: "#5F5E5A",
+    canceled: "#A32D2D",
+  };
+  const statusBreakdown = Object.entries(statusCounts).map(([name, value]) => ({
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    value,
+    color: statusColors[name] ?? "#8C8977",
+  }));
+
+  const todayLabel = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center text-sm text-[#5F5E5A]">
+        Loading your dashboard…
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[600px] w-full p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
@@ -118,12 +243,12 @@ export default function OverviewDashboard({ onNavigate }: { onNavigate?: (screen
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="text-xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
-            John's Taxi
+            {businessName || "Your Taxi"}
           </div>
-          <div className="text-sm text-[#5F5E5A]">Wednesday, 19 August</div>
+          <div className="text-sm text-[#5F5E5A]">{todayLabel}</div>
         </div>
         <button
-          onClick={() => setOnline(!online)}
+          onClick={handleToggleOnline}
           className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium cursor-pointer ${online ? "emboss-toggle-on" : "emboss-toggle-off"}`}
           style={{ color: online ? "#3B6D11" : "#5F5E5A" }}
         >
@@ -134,9 +259,14 @@ export default function OverviewDashboard({ onNavigate }: { onNavigate?: (screen
 
       {/* Stat cards */}
       <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard label="Rides today" value="4" />
-        <StatCard label="Earnings today" value="€138" sub="+€22 vs yesterday" accent="#3B6D11" />
-        <StatCard label="Next pickup" value="42m" sub="Sarah Kelly, Grafton St" accent="#185FA5" />
+        <StatCard label="Rides today" value={String(ridesTodayCount)} />
+        <StatCard label="Earnings today" value={`€${earningsToday.toFixed(2)}`} accent="#3B6D11" />
+        <StatCard
+          label="Next pickup"
+          value={nextUpcoming ? new Date(nextUpcoming.scheduled_time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "—"}
+          sub={nextUpcoming ? `${nextUpcoming.passenger_name}, ${nextUpcoming.pickup_address}` : "No upcoming rides"}
+          accent="#185FA5"
+        />
       </div>
 
       {/* Charts row */}
@@ -160,18 +290,22 @@ export default function OverviewDashboard({ onNavigate }: { onNavigate?: (screen
 
         <div className="rounded-xl border border-[#E4E2DA] bg-white p-5">
           <div className="mb-3 text-sm font-medium text-[#2C2C2A]">Today's status mix</div>
-          <div style={{ width: "100%", height: 120 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={statusBreakdown} dataKey="value" innerRadius={30} outerRadius={48} paddingAngle={3}>
-                  {statusBreakdown.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} stroke="none" />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-1 flex justify-center gap-4 text-xs">
+          {statusBreakdown.length === 0 ? (
+            <div className="flex h-[120px] items-center justify-center text-xs text-[#8C8977]">No bookings today yet</div>
+          ) : (
+            <div style={{ width: "100%", height: 120 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={statusBreakdown} dataKey="value" innerRadius={30} outerRadius={48} paddingAngle={3}>
+                    {statusBreakdown.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} stroke="none" />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <div className="mt-1 flex flex-wrap justify-center gap-4 text-xs">
             {statusBreakdown.map((s) => (
               <div key={s.name} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
@@ -186,7 +320,7 @@ export default function OverviewDashboard({ onNavigate }: { onNavigate?: (screen
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 rounded-xl border border-[#E4E2DA] bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
-            <div className="text-sm font-medium text-[#2C2C2A]">Upcoming bookings</div>
+            <div className="text-sm font-medium text-[#2C2C2A]">Today's bookings</div>
             <button
               onClick={() => onNavigate?.("bookings")}
               className="emboss-btn-primary flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
@@ -194,39 +328,56 @@ export default function OverviewDashboard({ onNavigate }: { onNavigate?: (screen
               <Plus size={13} /> Add booking
             </button>
           </div>
-          <div className="space-y-2">
-            {bookings.map((b) => (
-              <div key={b.id} className="flex items-center justify-between rounded-lg border border-[#E4E2DA] px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-md bg-[#F1EFE8] px-2 py-1 text-xs font-medium text-[#2C2C2A]">
-                    {b.time}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-[#2C2C2A]">{b.name}</div>
-                    <div className="flex items-center gap-1 text-xs text-[#5F5E5A]">
-                      <MapPin size={11} /> {b.pickup} → {b.drop}
+          {todayBookings.length === 0 ? (
+            <div className="py-8 text-center text-xs text-[#8C8977]">No bookings scheduled for today</div>
+          ) : (
+            <div className="space-y-2">
+              {todayBookings.map((b) => (
+                <div key={b.id} className="flex items-center justify-between rounded-lg border border-[#E4E2DA] px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-md bg-[#F1EFE8] px-2 py-1 text-xs font-medium text-[#2C2C2A]">
+                      {new Date(b.scheduled_time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-[#2C2C2A]">{b.passenger_name}</div>
+                      <div className="flex items-center gap-1 text-xs text-[#5F5E5A]">
+                        <MapPin size={11} /> {b.pickup_address} → {b.dropoff_address}
+                      </div>
                     </div>
                   </div>
+                  <StatusPill status={b.status} />
                 </div>
-                <StatusPill status={b.status} />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-[#E4E2DA] bg-white p-5">
           <div className="mb-3 text-sm font-medium text-[#2C2C2A]">Active trip</div>
           <div className="mb-4 flex h-28 items-center justify-center rounded-lg bg-[#F1EFE8]">
-            <Car size={26} color="#185FA5" />
+            <Car size={26} color={activeTrip ? "#185FA5" : "#B4B2A9"} />
           </div>
-          <div className="space-y-2.5 text-xs">
-            {["Confirmed", "En route", "Arrived", "Completed"].map((step, i) => (
-              <div key={step} className="flex items-center gap-2">
-                <Circle size={7} fill={i <= 1 ? "#185FA5" : "#D3D1C7"} stroke="none" />
-                <span style={{ color: i <= 1 ? "#2C2C2A" : "#B4B2A9", fontWeight: i <= 1 ? 500 : 400 }}>{step}</span>
-              </div>
-            ))}
-          </div>
+          {activeTrip ? (
+            <div className="space-y-2.5 text-xs">
+              <div className="text-sm font-medium text-[#2C2C2A]">{activeTrip.passenger_name}</div>
+              {["confirmed", "en_route", "arrived", "completed"].map((step, i) => {
+                const order = ["confirmed", "en_route", "arrived", "in_progress", "completed"];
+                const currentIndex = order.indexOf(activeTrip.status);
+                const stepIndex = order.indexOf(step);
+                const reached = stepIndex <= currentIndex;
+                return (
+                  <div key={step} className="flex items-center gap-2">
+                    <Circle size={7} fill={reached ? "#185FA5" : "#D3D1C7"} stroke="none" />
+                    <span style={{ color: reached ? "#2C2C2A" : "#B4B2A9", fontWeight: reached ? 500 : 400 }}>
+                      {step.charAt(0).toUpperCase() + step.slice(1).replace("_", " ")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center text-xs text-[#8C8977]">No trip currently in progress</div>
+          )}
         </div>
       </div>
 
@@ -247,3 +398,4 @@ export default function OverviewDashboard({ onNavigate }: { onNavigate?: (screen
     </div>
   );
 }
+
