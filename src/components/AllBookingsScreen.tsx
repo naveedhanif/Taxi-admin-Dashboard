@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle } from "lucide-react";
+import { supabase } from "../supabaseClient";
 
 export interface Booking {
   id: string;
@@ -8,20 +9,10 @@ export interface Booking {
   pickup_address: string;
   dropoff_address: string;
   scheduled_time: string;
-  quoted_price: number;
+  estimated_fare: number | null;
+  final_fare: number | null;
   status: "pending" | "confirmed" | "en_route" | "arrived" | "in_progress" | "completed" | "canceled";
 }
-
-const initialBookings: Booking[] = [
-  { id: "BK-101", passenger_name: "Sarah Kelly", passenger_phone: "+353 87 123 4567", pickup_address: "Grafton St, Dublin", dropoff_address: "Dublin Airport T1", scheduled_time: "2026-08-19 14:20", quoted_price: 38.50, status: "confirmed" },
-  { id: "BK-102", passenger_name: "Tom Byrne", passenger_phone: "+353 86 987 6543", pickup_address: "St. Stephen's Green", dropoff_address: "Ballsbridge Hotel", scheduled_time: "2026-08-19 15:05", quoted_price: 18.00, status: "pending" },
-  { id: "BK-103", passenger_name: "Aoife Ryan", passenger_phone: "+353 85 555 1212", pickup_address: "Temple Bar", dropoff_address: "Dun Laoghaire Pier", scheduled_time: "2026-08-19 16:40", quoted_price: 32.00, status: "confirmed" },
-  { id: "BK-104", passenger_name: "Michael Doyle", passenger_phone: "+353 87 888 9900", pickup_address: "IFSC Quarter", dropoff_address: "Malahide Castle", scheduled_time: "2026-08-19 18:15", quoted_price: 45.00, status: "pending" },
-  { id: "BK-105", passenger_name: "Liam O'Connor", passenger_phone: "+353 89 222 3344", pickup_address: "Dundrum Town Centre", dropoff_address: "Sandyford Business Park", scheduled_time: "2026-08-19 19:30", quoted_price: 22.50, status: "en_route" },
-  { id: "BK-106", passenger_name: "Emma Walsh", passenger_phone: "+353 83 444 5566", pickup_address: "Grand Canal Dock", dropoff_address: "Howth Summit", scheduled_time: "2026-08-19 21:00", quoted_price: 40.00, status: "arrived" },
-  { id: "BK-107", passenger_name: "Ciaran Murphy", passenger_phone: "+353 87 111 2233", pickup_address: "Heuston Station", dropoff_address: "Ranelagh Village", scheduled_time: "2026-08-19 11:15", quoted_price: 16.50, status: "completed" },
-  { id: "BK-108", passenger_name: "David Smith", passenger_phone: "+353 86 333 4455", pickup_address: "Connolly Station", dropoff_address: "Rathmines", scheduled_time: "2026-08-19 09:30", quoted_price: 14.00, status: "canceled" },
-];
 
 function useGoogleFont() {
   useEffect(() => {
@@ -96,13 +87,72 @@ function StatusPill({ status }: { status: Booking["status"] }) {
   );
 }
 
-export default function AllBookingsScreen() {
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+export default function AllBookingsScreen({ driverId }: { driverId: string | null }) {
   useGoogleFont();
-  const [bookingsList, setBookingsList] = useState<Booking[]>(initialBookings);
+  const [bookingsList, setBookingsList] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  useEffect(() => {
+    if (!driverId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+
+    async function loadBookings() {
+      setLoading(true);
+      setErrorMessage("");
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, scheduled_time, estimated_fare, final_fare, status")
+        .eq("driver_id", driverId)
+        .order("scheduled_time", { ascending: true });
+
+      if (cancelled) return;
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setBookingsList((data ?? []) as Booking[]);
+      }
+      setLoading(false);
+    }
+
+    loadBookings();
+
+    // Live updates: new bookings and status changes from the passenger
+    // app / other tabs show up here without a manual refresh.
+    const channel = supabase
+      .channel(`driver-bookings-${driverId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `driver_id=eq.${driverId}` },
+        () => loadBookings()
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [driverId]);
 
   const filterOptions = [
     { value: "all", label: "All Statuses" },
@@ -130,7 +180,16 @@ export default function AllBookingsScreen() {
       return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
     });
 
-  const updateBookingStatus = (id: string, newStatus: Booking["status"]) => {
+  const updateBookingStatus = async (id: string, newStatus: Booking["status"]) => {
+    setUpdatingId(id);
+    const { error } = await supabase.from("bookings").update({ status: newStatus }).eq("id", id);
+    setUpdatingId(null);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
     setBookingsList((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
     );
@@ -197,10 +256,20 @@ export default function AllBookingsScreen() {
           <span>Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong></span>
         </div>
 
+        {errorMessage && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+            <AlertCircle size={14} /> {errorMessage}
+          </div>
+        )}
+
         <div className="space-y-3">
-          {filteredBookings.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#5F5E5A]">
+              <Loader2 size={16} className="animate-spin" /> Loading bookings…
+            </div>
+          ) : filteredBookings.length === 0 ? (
             <div className="py-12 text-center text-sm text-[#5F5E5A]">
-              No bookings match your filter criteria.
+              {bookingsList.length === 0 ? "No bookings yet." : "No bookings match your filter criteria."}
             </div>
           ) : (
             filteredBookings.map((b) => (
@@ -213,13 +282,13 @@ export default function AllBookingsScreen() {
                   <div className="rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
                     <div className="flex items-center gap-1">
                       <Clock size={11} className="text-[#5F5E5A]" />
-                      <span>{b.scheduled_time.split(" ")[1]}</span>
+                      <span>{formatTime(b.scheduled_time)}</span>
                     </div>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-[#2C2C2A]">{b.passenger_name}</span>
-                      <span className="text-[11px] font-mono text-[#B4B2A9]">{b.id}</span>
+                      <span className="text-[11px] font-mono text-[#B4B2A9]">{b.id.slice(0, 8)}</span>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5F5E5A]">
                       <span className="flex items-center gap-1">
@@ -233,7 +302,9 @@ export default function AllBookingsScreen() {
 
                 <div className="flex items-center justify-between gap-4 md:justify-end">
                   <div className="text-right">
-                    <div className="text-sm font-bold text-[#2C2C2A]">€{b.quoted_price.toFixed(2)}</div>
+                    <div className="text-sm font-bold text-[#2C2C2A]">
+                      €{(b.final_fare ?? b.estimated_fare ?? 0).toFixed(2)}
+                    </div>
                     <StatusPill status={b.status} />
                   </div>
                   <ChevronRight size={16} className="text-[#B4B2A9]" />
@@ -250,7 +321,7 @@ export default function AllBookingsScreen() {
           <div className="w-full max-w-lg rounded-xl border border-[#E4E2DA] bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between border-b border-[#E4E2DA] pb-3">
               <div>
-                <div className="text-xs font-mono text-[#5F5E5A]">{selectedBooking.id}</div>
+                <div className="text-xs font-mono text-[#5F5E5A]">{selectedBooking.id.slice(0, 8)}</div>
                 <h3 className="text-lg font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
                   {selectedBooking.passenger_name}
                 </h3>
@@ -286,40 +357,49 @@ export default function AllBookingsScreen() {
                   <Calendar size={14} className="text-[#5F5E5A]" />
                   <span className="text-[#5F5E5A]">Scheduled Time</span>
                 </div>
-                <span className="font-bold text-[#2C2C2A]">{selectedBooking.scheduled_time}</span>
+                <span className="font-bold text-[#2C2C2A]">{formatDateTime(selectedBooking.scheduled_time)}</span>
               </div>
 
               <div className="flex justify-between items-center rounded-lg border border-[#E4E2DA] p-3">
-                <span className="text-[#5F5E5A]">Quoted Price</span>
-                <span className="text-base font-bold text-[#2C2C2A]">€{selectedBooking.quoted_price.toFixed(2)}</span>
+                <span className="text-[#5F5E5A]">{selectedBooking.final_fare != null ? "Final Fare" : "Estimated Fare"}</span>
+                <span className="text-base font-bold text-[#2C2C2A]">
+                  €{(selectedBooking.final_fare ?? selectedBooking.estimated_fare ?? 0).toFixed(2)}
+                </span>
               </div>
             </div>
 
             {/* Status Action Buttons */}
             <div className="mt-5 border-t border-[#E4E2DA] pt-4">
-              <div className="mb-2 text-xs font-semibold text-[#5F5E5A]">Update Booking Status:</div>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
+                Update Booking Status:
+                {updatingId === selectedBooking.id && <Loader2 size={12} className="animate-spin" />}
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
+                  disabled={updatingId === selectedBooking.id}
                   onClick={() => updateBookingStatus(selectedBooking.id, "confirmed")}
-                  className="emboss-btn-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
+                  className="emboss-btn-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white cursor-pointer disabled:opacity-60"
                 >
                   Confirm
                 </button>
                 <button
+                  disabled={updatingId === selectedBooking.id}
                   onClick={() => updateBookingStatus(selectedBooking.id, "en_route")}
-                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer"
+                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer disabled:opacity-60"
                 >
                   Mark En Route
                 </button>
                 <button
+                  disabled={updatingId === selectedBooking.id}
                   onClick={() => updateBookingStatus(selectedBooking.id, "completed")}
-                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#27500A] bg-[#EAF3DE] cursor-pointer"
+                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#27500A] bg-[#EAF3DE] cursor-pointer disabled:opacity-60"
                 >
                   Complete
                 </button>
                 <button
+                  disabled={updatingId === selectedBooking.id}
                   onClick={() => updateBookingStatus(selectedBooking.id, "canceled")}
-                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#991B1B] cursor-pointer"
+                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#991B1B] cursor-pointer disabled:opacity-60"
                 >
                   Cancel
                 </button>
