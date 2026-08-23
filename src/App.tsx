@@ -29,15 +29,23 @@ export default function App() {
   // current session on load, then again on every sign-in/sign-out — this
   // is the one source of truth for "who's logged in right now."
   const [driverId, setDriverId] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const result = await getDriverForUser(session.user.id);
         setDriverId(result.driverId);
+        // Driver already has an account — go straight to dashboard,
+        // skip onboarding entirely.
+        if (result.driverId) {
+          setViewMode("dashboard");
+          setDashboardScreen("overview");
+        }
       } else {
         setDriverId(null);
       }
+      setSessionChecked(true);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -108,12 +116,27 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="mx-auto max-w-7xl py-6">
-        {viewMode === "onboarding" ? (
-          <div className="px-4">
-            <StepProgressIndicator
-              currentStep={onboardingStep}
-              onStepClick={(step) => setOnboardingStep(step)}
-            />
+      {!sessionChecked ? (
+        <div className="flex min-h-[400px] items-center justify-center text-sm text-[#5F5E5A]">
+          Loading…
+        </div>
+      ) : viewMode === "onboarding" ? (
+        <div className="px-4">
+          {/* Returning driver prompt — shown above onboarding steps */}
+          <div className="mb-6 mx-auto max-w-md rounded-xl border border-[#E4E2DA] bg-white p-4 flex items-center justify-between">
+            <span className="text-sm text-[#5F5E5A]">Already have an account?</span>
+            <button
+              onClick={() => { setViewMode("dashboard"); setDashboardScreen("login"); }}
+              className="emboss-btn-primary rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer"
+            >
+              Sign in
+            </button>
+          </div>
+
+          <StepProgressIndicator
+            currentStep={onboardingStep}
+            onStepClick={(step) => setOnboardingStep(step)}
+          />
 
             {onboardingStep === 1 && (
               <BusinessDetailsStep onNext={() => setOnboardingStep(2)} />
@@ -142,7 +165,7 @@ export default function App() {
               />
             )}
           </div>
-        ) : (
+      ) : (
           <div>
             <div className="mb-4 flex flex-wrap items-center justify-center gap-2 px-4">
               {navigationItems.map((item) => {
