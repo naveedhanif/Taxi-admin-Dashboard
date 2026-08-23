@@ -29,13 +29,18 @@ import {
   CreditCard,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 export default function App() {
   const [viewMode, setViewMode] = useState<"onboarding" | "dashboard">("onboarding");
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
   const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "fare_rules" | "vehicle" | "stripe">("overview");
+  // Mobile: drawer is closed by default, opened via hamburger.
+  // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Real session tracking. onAuthStateChange fires immediately with the
   // current session on load, then again on every sign-in/sign-out — this
@@ -93,14 +98,25 @@ export default function App() {
       <header className="sticky top-0 z-40 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 backdrop-blur-md px-4 py-3">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            {viewMode === "dashboard" && (
-              <button
-                onClick={() => setSidebarOpen((v) => !v)}
-                className="emboss-btn flex h-9 w-9 items-center justify-center rounded-lg text-[#2C2C2A] lg:hidden"
-                aria-label="Toggle menu"
-              >
-                {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-              </button>
+            {viewMode === "dashboard" && driverId && (
+              <>
+                {/* Mobile: opens/closes the slide-over drawer */}
+                <button
+                  onClick={() => setSidebarOpen((v) => !v)}
+                  className="emboss-btn flex h-9 w-9 items-center justify-center rounded-lg text-[#2C2C2A] lg:hidden"
+                  aria-label="Toggle menu"
+                >
+                  {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+                </button>
+                {/* Desktop: collapses/expands the fixed sidebar */}
+                <button
+                  onClick={() => setSidebarCollapsed((v) => !v)}
+                  className="emboss-btn hidden h-9 w-9 items-center justify-center rounded-lg text-[#2C2C2A] lg:flex"
+                  aria-label="Toggle sidebar"
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+                </button>
+              </>
             )}
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
@@ -229,10 +245,13 @@ export default function App() {
                 />
               )}
               <aside
-                className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 transform border-r border-[#ECE9E0] bg-[#FBFAF6] p-4 transition-transform duration-200 ease-out lg:sticky lg:top-[57px] lg:z-0 lg:h-[calc(100vh-57px)] lg:translate-x-0 ${
+                className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 transform p-3 transition-all duration-200 ease-out lg:sticky lg:top-[57px] lg:z-0 lg:h-[calc(100vh-57px)] lg:translate-x-0 ${
                   sidebarOpen ? "translate-x-0" : "-translate-x-full"
-                }`}
-                style={{ top: sidebarOpen ? 0 : undefined }}
+                } ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"}`}
+                style={{
+                  top: sidebarOpen ? 0 : undefined,
+                  background: "linear-gradient(180deg, #1B2430, #131A24)",
+                }}
               >
                 <nav className="flex flex-col gap-1">
                   {navigationItems.map((item) => {
@@ -242,14 +261,25 @@ export default function App() {
                       <button
                         key={item.id}
                         onClick={() => selectScreen(item.id)}
+                        title={sidebarCollapsed ? item.label : undefined}
                         className={`flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-sm font-medium cursor-pointer transition-all text-left ${
+                          sidebarCollapsed ? "lg:justify-center lg:px-0" : ""
+                        } ${
                           isActive
-                            ? "emboss-btn-primary text-white"
-                            : "text-[#5F5E5A] hover:bg-[#F0EEE7] hover:text-[#2C2C2A]"
+                            ? "text-white"
+                            : "text-[#9AA3B2] hover:bg-white/5 hover:text-white"
                         }`}
+                        style={
+                          isActive
+                            ? {
+                                background: "linear-gradient(135deg, #378ADD, #0C447C)",
+                                boxShadow: "2px 2px 8px rgba(4,44,83,0.5)",
+                              }
+                            : undefined
+                        }
                       >
-                        <Icon size={16} />
-                        <span>{item.label}</span>
+                        <Icon size={16} className="shrink-0" />
+                        <span className={sidebarCollapsed ? "lg:hidden" : ""}>{item.label}</span>
                       </button>
                     );
                   })}
