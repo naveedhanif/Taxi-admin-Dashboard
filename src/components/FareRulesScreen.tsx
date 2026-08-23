@@ -1,6 +1,5 @@
-import type React from "react";
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, ShieldCheck, Loader2, AlertCircle, Percent } from "lucide-react";
+import { ShieldCheck, Loader2, AlertCircle, Percent, ExternalLink, Save, Check } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 export interface FareRule {
@@ -11,24 +10,11 @@ export interface FareRule {
   per_km_rate: number;
   per_minute_rate: number;
   minimum_fare: number;
+  tariff_a_cap: number | null;
+  tariff_b_per_km_rate: number | null;
+  tariff_b_per_minute_rate: number | null;
   discount_percent: number;
   is_active: boolean;
-}
-
-const TARIFF_PERIODS = ["standard", "premium", "special"];
-
-function emptyRule(): FareRule {
-  return {
-    id: "",
-    name: "New Rate Profile",
-    tariff_period: "standard",
-    base_rate: 4.5,
-    per_km_rate: 1.7,
-    per_minute_rate: 0.35,
-    minimum_fare: 12.0,
-    discount_percent: 0,
-    is_active: true,
-  };
 }
 
 function useGoogleFont() {
@@ -99,10 +85,12 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
   useGoogleFont();
   const [rules, setRules] = useState<FareRule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [editingRule, setEditingRule] = useState<FareRule | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Local edit buffer keyed by rule id, so typing doesn't save on every
+  // keystroke — only on blur / explicit save.
+  const [discountDrafts, setDiscountDrafts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!driverId) {
@@ -117,76 +105,40 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
     setErrorMessage("");
     const { data, error } = await supabase
       .from("fare_rules")
-      .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, discount_percent, is_active")
+      .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, tariff_a_cap, tariff_b_per_km_rate, tariff_b_per_minute_rate, discount_percent, is_active")
       .eq("driver_id", driverId)
-      .order("created_at", { ascending: true });
+      .order("tariff_period", { ascending: true });
 
     if (error) {
       setErrorMessage(error.message);
     } else {
-      setRules((data ?? []) as FareRule[]);
+      const loaded = (data ?? []) as FareRule[];
+      setRules(loaded);
+      setDiscountDrafts(Object.fromEntries(loaded.map((r) => [r.id, r.discount_percent])));
     }
     setLoading(false);
   }
 
-  const toggleRuleActive = async (rule: FareRule) => {
+  const saveDiscount = async (rule: FareRule) => {
+    const newValue = Math.min(100, Math.max(0, discountDrafts[rule.id] ?? rule.discount_percent));
+    if (newValue === rule.discount_percent) return;
+
+    setSavingId(rule.id);
+    setErrorMessage("");
     const { error } = await supabase
       .from("fare_rules")
-      .update({ is_active: !rule.is_active })
+      .update({ discount_percent: newValue })
       .eq("id", rule.id);
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-    setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, is_active: !r.is_active } : r)));
-  };
-
-  const handleSaveRule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingRule || !driverId) return;
-    setSaving(true);
-    setErrorMessage("");
-
-    const { id, ...fields } = editingRule;
-    const isNew = !id;
-
-    const { data, error } = isNew
-      ? await supabase.from("fare_rules").insert({ ...fields, driver_id: driverId }).select().single()
-      : await supabase.from("fare_rules").update(fields).eq("id", id).select().single();
-
-    setSaving(false);
+    setSavingId(null);
 
     if (error) {
       setErrorMessage(error.message);
       return;
     }
 
-    if (isNew) {
-      setRules((prev) => [...prev, data as FareRule]);
-    } else {
-      setRules((prev) => prev.map((r) => (r.id === id ? (data as FareRule) : r)));
-    }
-    setIsModalOpen(false);
-    setEditingRule(null);
-  };
-
-  const openAddModal = () => {
-    setEditingRule(emptyRule());
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (rule: FareRule) => {
-    setEditingRule({ ...rule });
-    setIsModalOpen(true);
-  };
-
-  const handleDeleteRule = async (id: string) => {
-    const { error } = await supabase.from("fare_rules").delete().eq("id", id);
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-    setRules((prev) => prev.filter((r) => r.id !== id));
+    setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, discount_percent: newValue } : r)));
+    setSavedId(rule.id);
+    setTimeout(() => setSavedId(null), 2000);
   };
 
   return (
@@ -194,20 +146,11 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
       <EmbossStyles />
 
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
-            Fare Rules & Discounts
-          </h1>
-          <p className="text-sm text-[#5F5E5A]">Set tariffs per time period, and an optional passenger discount for each</p>
-        </div>
-        <button
-          onClick={openAddModal}
-          disabled={!driverId}
-          className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer disabled:opacity-60"
-        >
-          <Plus size={14} /> Add fare rule
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
+          Fare Rules & Discounts
+        </h1>
+        <p className="text-sm text-[#5F5E5A]">Set an optional passenger discount for each official tariff</p>
       </div>
 
       {errorMessage && (
@@ -220,7 +163,16 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
       <div className="mb-6 rounded-xl border border-[#E4E2DA] bg-[#F1EFE8] p-4 flex items-start gap-3">
         <ShieldCheck size={18} className="mt-0.5 text-[#185FA5] shrink-0" />
         <div className="text-xs text-[#5F5E5A] leading-relaxed">
-          <strong>Direct Quote Engine:</strong> Your passenger booking PWA queries these active rates directly to generate real-time upfront fare estimates before checkout. The tariff period (standard/premium/special) is matched automatically based on trip time; any discount you set is shown as a line item on the passenger's fare estimate.
+          <strong>Fixed at the National Maximum Taxi Fare.</strong> Rates for all three tariffs are set by the National Transport Authority and can't be edited here — see{" "}
+          <a
+            href="https://www.transportforireland.ie/fares/taxi-fares/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-0.5 font-medium text-[#185FA5] underline"
+          >
+            the official NTA taxi fares page <ExternalLink size={10} />
+          </a>
+          . You can set a passenger discount per tariff below — it's shown as a line item on the passenger's fare estimate.
         </div>
       </div>
 
@@ -231,224 +183,101 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
         </div>
       ) : rules.length === 0 ? (
         <div className="rounded-xl border border-[#E4E2DA] bg-white py-16 text-center text-sm text-[#5F5E5A]">
-          No fare rules yet — add one to start giving passengers real estimates.
+          No fare rules set up for this account yet — contact support to get the standard NTA tariffs added.
         </div>
       ) : (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {rules.map((rule) => (
-          <div
-            key={rule.id}
-            className={`rounded-xl border bg-white p-5 transition-all ${
-              rule.is_active ? "border-[#639922] shadow-sm" : "border-[#E4E2DA]"
-            }`}
-          >
-            <div className="mb-1 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+        {rules.map((rule) => {
+          const draft = discountDrafts[rule.id] ?? rule.discount_percent;
+          const isDirty = draft !== rule.discount_percent;
+          return (
+            <div
+              key={rule.id}
+              className="rounded-xl border border-[#E4E2DA] bg-white p-5"
+            >
+              <div className="mb-1 flex items-center justify-between">
                 <span className="font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
                   {rule.name}
                 </span>
-              </div>
-              <button
-                onClick={() => toggleRuleActive(rule)}
-                className={`px-3 py-1 text-xs font-semibold rounded-full cursor-pointer transition-all ${
-                  rule.is_active ? "emboss-toggle-on text-[#27500A]" : "emboss-toggle-off text-[#5F5E5A]"
-                }`}
-              >
-                {rule.is_active ? "Active" : "Inactive"}
-              </button>
-            </div>
-            <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-[#8C8977]">
-              {rule.tariff_period} tariff
-            </div>
-
-            <div className="space-y-2.5 text-xs text-[#5F5E5A] border-t border-[#E4E2DA] pt-3 mb-4">
-              <div className="flex justify-between items-center">
-                <span>Base pickup fare</span>
-                <span className="font-semibold text-[#2C2C2A]">€{rule.base_rate.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Rate per km</span>
-                <span className="font-semibold text-[#2C2C2A]">€{rule.per_km_rate.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Rate per minute</span>
-                <span className="font-semibold text-[#2C2C2A]">€{rule.per_minute_rate.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center pt-1 border-t border-dashed border-[#E4E2DA]">
-                <span className="font-medium text-[#2C2C2A]">Minimum trip fare</span>
-                <span className="font-bold text-[#185FA5]">€{rule.minimum_fare.toFixed(2)}</span>
-              </div>
-              {rule.discount_percent > 0 && (
-                <div className="flex justify-between items-center rounded-lg bg-[#EAF3DE] px-2.5 py-1.5 -mx-1">
-                  <span className="flex items-center gap-1 font-medium text-[#27500A]">
-                    <Percent size={11} /> Passenger discount
-                  </span>
-                  <span className="font-bold text-[#27500A]">{rule.discount_percent}%</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-[#E4E2DA]">
-              <button
-                onClick={() => openEditModal(rule)}
-                className="emboss-btn flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer"
-              >
-                <Edit2 size={13} /> Edit
-              </button>
-              <button
-                onClick={() => handleDeleteRule(rule.id)}
-                className="emboss-btn flex items-center justify-center rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#991B1B] hover:bg-red-50 cursor-pointer"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-      )}
-
-      {/* Edit / Add Modal */}
-      {isModalOpen && editingRule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl border border-[#E4E2DA] bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-              {editingRule.id ? "Edit Fare Rule" : "Create Fare Rule"}
-            </h3>
-
-            <form onSubmit={handleSaveRule} className="space-y-4 text-xs">
-              <div>
-                <label className="mb-1 block font-medium text-[#2C2C2A]">Rule Profile Name</label>
-                <input
-                  type="text"
-                  required
-                  value={editingRule.name}
-                  onChange={(e) => setEditingRule({ ...editingRule, name: e.target.value })}
-                  className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block font-medium text-[#2C2C2A]">Tariff Period</label>
-                <select
-                  value={editingRule.tariff_period}
-                  onChange={(e) => setEditingRule({ ...editingRule, tariff_period: e.target.value })}
-                  className="emboss-input w-full rounded-lg px-3 py-2 text-xs font-medium text-[#2C2C2A]"
+                <span
+                  className="px-2.5 py-0.5 text-[10px] font-semibold rounded-full"
+                  style={{ background: rule.is_active ? "#EAF3DE" : "#F1EFE8", color: rule.is_active ? "#27500A" : "#5F5E5A" }}
                 >
-                  {TARIFF_PERIODS.map((p) => (
-                    <option key={p} value={p}>
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
-                    </option>
-                  ))}
-                </select>
+                  {rule.is_active ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-[#8C8977]">
+                {rule.tariff_period} tariff
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block font-medium text-[#2C2C2A]">Base Fare (€)</label>
-                  <input
-                    type="number"
-                    step="0.10"
-                    required
-                    value={editingRule.base_rate}
-                    onChange={(e) => setEditingRule({ ...editingRule, base_rate: parseFloat(e.target.value) || 0 })}
-                    className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                  />
+              <div className="space-y-2 text-xs text-[#5F5E5A] border-t border-[#E4E2DA] pt-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span>Initial charge</span>
+                  <span className="font-semibold text-[#2C2C2A]">€{rule.base_rate.toFixed(2)}</span>
                 </div>
-                <div>
-                  <label className="mb-1 block font-medium text-[#2C2C2A]">Minimum Fare (€)</label>
-                  <input
-                    type="number"
-                    step="0.50"
-                    required
-                    value={editingRule.minimum_fare}
-                    onChange={(e) => setEditingRule({ ...editingRule, minimum_fare: parseFloat(e.target.value) || 0 })}
-                    className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                  />
+                <div className="flex justify-between items-center">
+                  <span>Tariff A — per km / per min</span>
+                  <span className="font-semibold text-[#2C2C2A]">€{rule.per_km_rate.toFixed(2)} / €{rule.per_minute_rate.toFixed(2)}</span>
                 </div>
+                {rule.tariff_a_cap != null && rule.tariff_a_cap > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span>Tariff A cap</span>
+                    <span className="font-medium text-[#2C2C2A]">€{rule.tariff_a_cap.toFixed(2)}</span>
+                  </div>
+                )}
+                {rule.tariff_b_per_km_rate != null && (
+                  <div className="flex justify-between items-center pt-1 border-t border-dashed border-[#E4E2DA]">
+                    <span>Tariff B — per km / per min</span>
+                    <span className="font-semibold text-[#2C2C2A]">€{rule.tariff_b_per_km_rate.toFixed(2)} / €{(rule.tariff_b_per_minute_rate ?? 0).toFixed(2)}</span>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block font-medium text-[#2C2C2A]">Per Kilometer Rate (€)</label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    required
-                    value={editingRule.per_km_rate}
-                    onChange={(e) => setEditingRule({ ...editingRule, per_km_rate: parseFloat(e.target.value) || 0 })}
-                    className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block font-medium text-[#2C2C2A]">Per Minute Rate (€)</label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    required
-                    value={editingRule.per_minute_rate}
-                    onChange={(e) => setEditingRule({ ...editingRule, per_minute_rate: parseFloat(e.target.value) || 0 })}
-                    className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 flex items-center gap-1.5 font-medium text-[#2C2C2A]">
-                  <Percent size={12} className="text-[#27500A]" /> Passenger Discount (%)
+              <div className="border-t border-[#E4E2DA] pt-3">
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[#2C2C2A]">
+                  <Percent size={12} className="text-[#27500A]" /> Passenger discount
                 </label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="100"
-                  value={editingRule.discount_percent}
-                  onChange={(e) => setEditingRule({ ...editingRule, discount_percent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
-                  className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                />
-                <p className="mt-1 text-[10px] text-[#8C8977]">
-                  Applied to every trip under this tariff, shown as a line item to the passenger on their fare estimate. Leave at 0 for no discount.
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={draft}
+                      onChange={(e) =>
+                        setDiscountDrafts((prev) => ({
+                          ...prev,
+                          [rule.id]: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)),
+                        }))
+                      }
+                      onBlur={() => isDirty && saveDiscount(rule)}
+                      className="emboss-input w-full rounded-lg px-3 py-2 pr-7 text-xs font-semibold text-[#2C2C2A]"
+                    />
+                    <span className="absolute right-3 top-2 text-xs text-[#8C8977]">%</span>
+                  </div>
+                  <button
+                    onClick={() => saveDiscount(rule)}
+                    disabled={!isDirty || savingId === rule.id}
+                    className="emboss-btn-primary flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg text-white disabled:opacity-40"
+                  >
+                    {savingId === rule.id ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : savedId === rule.id ? (
+                      <Check size={13} />
+                    ) : (
+                      <Save size={13} />
+                    )}
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[10px] text-[#8C8977]">
+                  Applied to every trip under this tariff, shown as a line item to the passenger.
                 </p>
               </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="active_check"
-                  checked={editingRule.is_active}
-                  onChange={(e) => setEditingRule({ ...editingRule, is_active: e.target.checked })}
-                  className="rounded border-[#E4E2DA]"
-                />
-                <label htmlFor="active_check" className="font-medium text-[#2C2C2A] cursor-pointer">
-                  Active (visible to passengers)
-                </label>
-              </div>
-
-              {errorMessage && (
-                <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
-                  <AlertCircle size={14} /> {errorMessage}
-                </div>
-              )}
-
-              <div className="mt-6 flex justify-end gap-2 border-t border-[#E4E2DA] pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="emboss-btn rounded-lg px-4 py-2 text-xs font-medium text-[#2C2C2A] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer disabled:opacity-60"
-                >
-                  {saving && <Loader2 size={13} className="animate-spin" />}
-                  {saving ? "Saving…" : "Save Fare Rule"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            </div>
+          );
+        })}
+      </div>
       )}
     </div>
   );
