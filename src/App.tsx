@@ -9,9 +9,7 @@ import FareRulesSetupStep from "./components/FareRulesSetupStep";
 import OverviewDashboard from "./components/OverviewDashboard";
 import LoginScreen from "./components/LoginScreen";
 import AllBookingsScreen from "./components/AllBookingsScreen";
-import FareRulesScreen from "./components/FareRulesScreen";
-import VehicleInfoScreen from "./components/VehicleInfoScreen";
-import StripeOnboardingScreen from "./components/StripeOnboardingScreen";
+import SettingsScreen from "./components/SettingsScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
@@ -24,9 +22,8 @@ import {
   LogIn,
   LogOut,
   Calendar,
-  Settings2,
+  Settings as SettingsIcon,
   Car,
-  CreditCard,
   Menu,
   X,
   PanelLeftClose,
@@ -36,7 +33,7 @@ import {
 export default function App() {
   const [viewMode, setViewMode] = useState<"onboarding" | "dashboard">("onboarding");
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
-  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "fare_rules" | "vehicle" | "stripe">("overview");
+  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings">("overview");
   // Mobile: drawer is closed by default, opened via hamburger.
   // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -79,9 +76,7 @@ export default function App() {
   const navigationItems = [
     { id: "overview", label: "Dashboard", icon: LayoutDashboard },
     { id: "bookings", label: "Bookings", icon: Calendar },
-    { id: "fare_rules", label: "Fare Rules", icon: Settings2 },
-    { id: "vehicle", label: "Vehicle", icon: Car },
-    { id: "stripe", label: "Stripe", icon: CreditCard },
+    { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
 
   function selectScreen(id: string) {
@@ -297,9 +292,7 @@ export default function App() {
                 />
               )}
               {dashboardScreen === "bookings" && <AllBookingsScreen driverId={driverId} />}
-              {dashboardScreen === "fare_rules" && <FareRulesScreen />}
-              {dashboardScreen === "vehicle" && <VehicleInfoScreen driverId={driverId} />}
-              {dashboardScreen === "stripe" && <StripeOnboardingScreen />}
+              {dashboardScreen === "settings" && <SettingsScreen driverId={driverId} />}
             </div>
           </main>
         </div>

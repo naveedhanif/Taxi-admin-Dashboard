@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { CreditCard, ExternalLink, CheckCircle2, ShieldCheck, ArrowRight, Building, DollarSign, Clock, RefreshCw } from "lucide-react";
+import { CreditCard, ExternalLink, CheckCircle2, ShieldCheck, ArrowRight, Building, Clock, RefreshCw, AlertCircle } from "lucide-react";
+import { supabase } from "../supabaseClient";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -48,17 +49,99 @@ function EmbossStyles() {
   );
 }
 
-export default function StripeOnboardingScreen() {
+export default function StripeOnboardingScreen({ driverId }: { driverId: string | null }) {
   useGoogleFont();
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleLaunchStripe = () => {
+  useEffect(() => {
+    if (!driverId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("drivers")
+        .select("stripe_connect_account_id, stripe_connect_onboarded")
+        .eq("id", driverId)
+        .single();
+      if (cancelled) return;
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setIsConnected(Boolean(data?.stripe_connect_onboarded));
+        setAccountId(data?.stripe_connect_account_id ?? null);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [driverId]);
+
+  // If we land back on this screen after Stripe's hosted onboarding
+  // (return_url points here with ?stripe_return=1), check the real
+  // account status and sync it to the database.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("stripe_return") !== "1") return;
+
+    (async () => {
+      setCheckingStatus(true);
+      setErrorMessage("");
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error("Not signed in");
+
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-connect-status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Couldn't check Stripe status");
+        setIsConnected(Boolean(data.onboarded));
+      } catch (err) {
+        setErrorMessage(err instanceof Error ? err.message : "Couldn't check Stripe status");
+      } finally {
+        setCheckingStatus(false);
+        // Clean the query param so a refresh doesn't re-trigger this
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    })();
+  }, []);
+
+  const handleLaunchStripe = async () => {
     setIsConnecting(true);
-    setTimeout(() => {
+    setErrorMessage("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+
+      const returnUrl = new URL(window.location.href);
+      returnUrl.searchParams.set("stripe_return", "1");
+      const refreshUrl = new URL(window.location.href);
+
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-connect-onboarding`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({ return_url: returnUrl.toString(), refresh_url: refreshUrl.toString() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't start Stripe onboarding");
+
+      window.location.href = data.url;
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Couldn't start Stripe onboarding");
       setIsConnecting(false);
-      setIsConnected(true);
-    }, 1200);
+    }
   };
 
   return (
@@ -135,21 +218,23 @@ export default function StripeOnboardingScreen() {
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                       <span>Account ID</span>
-                      <span className="font-mono text-[#2C2C2A]">acct_1N9x82KkL902pX</span>
+                      <span className="font-mono text-[#2C2C2A]">{accountId ?? "—"}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Connected Bank</span>
-                      <span className="font-medium text-[#2C2C2A]">Bank of Ireland (•••4821)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Payout Currency</span>
-                      <span className="font-semibold text-[#2C2C2A]">EUR (€)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Payout Schedule</span>
-                      <span className="font-medium text-[#27500A]">Daily Rolling</span>
+                      <span>Status</span>
+                      <span className="font-medium text-[#27500A]">Charges & payouts enabled</span>
                     </div>
                   </div>
+                </div>
+              )}
+              {errorMessage && (
+                <div className="mt-4 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                  <AlertCircle size={14} /> {errorMessage}
+                </div>
+              )}
+              {checkingStatus && (
+                <div className="mt-4 flex items-center gap-2 rounded-lg p-3 text-xs text-[#5F5E5A]" style={{ background: "#F1EFE8" }}>
+                  <RefreshCw size={14} className="animate-spin" /> Checking your Stripe status…
                 </div>
               )}
             </div>
@@ -163,8 +248,8 @@ export default function StripeOnboardingScreen() {
 
             <button
               onClick={handleLaunchStripe}
-              disabled={isConnecting}
-              className="emboss-btn-primary flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-xs font-semibold text-white cursor-pointer w-full sm:w-auto"
+              disabled={isConnecting || loading || !driverId}
+              className="emboss-btn-primary flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-xs font-semibold text-white cursor-pointer w-full sm:w-auto disabled:opacity-60"
             >
               {isConnecting ? (
                 <>
@@ -173,7 +258,7 @@ export default function StripeOnboardingScreen() {
                 </>
               ) : isConnected ? (
                 <>
-                  <span>Manage Stripe Express Dashboard</span>
+                  <span>Update Stripe Details</span>
                   <ExternalLink size={14} />
                 </>
               ) : (
@@ -190,43 +275,18 @@ export default function StripeOnboardingScreen() {
         <div className="rounded-xl border border-[#E4E2DA] bg-white p-5 flex flex-col justify-between">
           <div>
             <h3 className="mb-3 text-sm font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-              Payout Summary
+              Payouts
             </h3>
 
-            <div className="space-y-4">
-              <div className="rounded-lg border border-[#E4E2DA] p-3">
-                <div className="text-xs text-[#5F5E5A]">Available for Payout</div>
-                <div className="text-2xl font-bold text-[#2C2C2A] mt-1" style={{ fontFamily: "'Space Grotesk'" }}>
-                  €248.50
-                </div>
-                <div className="text-[11px] text-[#3B6D11] mt-0.5">Scheduled for transfer tomorrow at 08:00</div>
+            {isConnected ? (
+              <div className="rounded-lg border border-[#E4E2DA] bg-[#F1EFE8] p-4 text-xs text-[#5F5E5A] leading-relaxed">
+                Payout balances and schedule are managed directly in your Stripe Express dashboard. Live balance data isn't wired into this dashboard yet — click "Update Stripe Details" to reach your Stripe account.
               </div>
-
-              <div className="rounded-lg border border-[#E4E2DA] p-3">
-                <div className="text-xs text-[#5F5E5A]">In Transit / Pending</div>
-                <div className="text-xl font-bold text-[#2C2C2A] mt-1" style={{ fontFamily: "'Space Grotesk'" }}>
-                  €82.00
-                </div>
-                <div className="text-[11px] text-[#5F5E5A] mt-0.5">2 pre-booked trips pending completion</div>
+            ) : (
+              <div className="rounded-lg border border-[#E4E2DA] bg-[#F1EFE8] p-4 text-xs text-[#5F5E5A] leading-relaxed">
+                Connect your Stripe account to start accepting passenger payments and receiving payouts.
               </div>
-
-              <div className="rounded-lg border border-[#E4E2DA] p-3">
-                <div className="text-xs text-[#5F5E5A]">Monthly Platform Fee</div>
-                <div className="text-sm font-semibold text-[#2C2C2A] mt-1">
-                  Flat €39.00 / month
-                </div>
-                <div className="text-[11px] text-[#5F5E5A] mt-0.5">0% commission on passenger fares</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-[#E4E2DA]">
-            <button
-              onClick={() => setIsConnected(!isConnected)}
-              className="emboss-btn w-full rounded-lg py-2 text-xs font-medium text-[#5F5E5A] cursor-pointer"
-            >
-              Toggle Demo Status ({isConnected ? "Connected" : "Disconnected"})
-            </button>
+            )}
           </div>
         </div>
       </div>
