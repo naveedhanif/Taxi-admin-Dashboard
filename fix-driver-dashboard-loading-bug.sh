@@ -1,3 +1,9 @@
+#!/bin/bash
+set -e
+
+echo 'Fixing OverviewDashboard loading state bug...'
+
+cat > src/components/OverviewDashboard.tsx << 'FILE_EOF_0'
 import { useState, useEffect } from "react";
 import { MapPin, Plus, Settings, TrendingUp, Circle, Car } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from "recharts";
@@ -419,3 +425,13 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   );
 }
 
+FILE_EOF_0
+
+echo 'Staging and committing...'
+git add -A
+git commit -m 'Fix dashboard stuck loading when driverId is null on mount'
+
+echo 'Pushing to GitHub...'
+git push origin main
+
+echo 'Done.'
