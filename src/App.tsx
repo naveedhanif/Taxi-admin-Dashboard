@@ -120,7 +120,7 @@ export default function App() {
 
       {/* Top bar — branding + onboarding/dashboard mode toggle only.
           Screen navigation lives in the left sidebar now. */}
-      <header className="sticky top-0 z-40 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 backdrop-blur-md px-6 py-3">
+      <header className="sticky top-0 z-40 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 backdrop-blur-md px-3 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {viewMode === "dashboard" && driverId && (
@@ -308,8 +308,8 @@ export default function App() {
             </>
           )}
 
-          <main className="min-w-0 flex-1 py-6">
-            <div className="px-6">
+          <main className="min-w-0 flex-1 py-4 sm:py-6">
+            <div className="px-3 sm:px-6">
               {dashboardScreen === "overview" && <OverviewDashboard driverId={driverId} onNavigate={(s) => setDashboardScreen(s as any)} />}
               {dashboardScreen === "login" && (
                 <LoginScreen

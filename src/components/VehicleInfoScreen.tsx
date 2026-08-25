@@ -142,7 +142,7 @@ export default function VehicleInfoScreen({ driverId }: { driverId: string | nul
   };
 
   return (
-    <div className="min-h-[600px] w-full p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
+    <div className="min-h-[600px] w-full p-4 sm:p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
       <EmbossStyles />
 
       {/* Top Header */}

@@ -126,7 +126,7 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
   const isVerified = savedData?.licence_verified ?? false;
 
   return (
-    <div className="min-h-[500px] w-full p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
+    <div className="min-h-[500px] w-full p-4 sm:p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
       <EmbossStyles />
 
       <div className="mb-6">

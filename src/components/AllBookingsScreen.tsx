@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, Wallet, Check, Banknote, CreditCard } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, Wallet, Check, Banknote, CreditCard, MessageCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
+import { formatPhoneForLinks } from "../phoneLinks";
 
 export interface Booking {
   id: string;
@@ -381,9 +382,34 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
             </div>
 
             <div className="space-y-3.5 text-xs">
-              <div className="flex items-center gap-2 text-[#5F5E5A]">
-                <Phone size={14} className="text-[#185FA5]" />
-                <span className="font-medium text-[#2C2C2A]">{selectedBooking.passenger_phone}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-[#5F5E5A]">
+                  <Phone size={14} className="text-[#185FA5]" />
+                  <span className="font-medium text-[#2C2C2A]">{selectedBooking.passenger_phone}</span>
+                </div>
+                {(() => {
+                  const links = formatPhoneForLinks(selectedBooking.passenger_phone);
+                  if (!links) return null;
+                  return (
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={`tel:${links.tel}`}
+                        className="emboss-btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-[#2C2C2A]"
+                      >
+                        <Phone size={11} /> Call
+                      </a>
+                      <a
+                        href={`https://wa.me/${links.whatsapp}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white"
+                        style={{ background: "#25D366" }}
+                      >
+                        <MessageCircle size={11} /> WhatsApp
+                      </a>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="rounded-lg bg-[#F1EFE8] p-3 space-y-2">

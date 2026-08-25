@@ -279,11 +279,11 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   }
 
   return (
-    <div className="min-h-[600px] w-full p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
+    <div className="min-h-[600px] w-full p-4 sm:p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
       <EmbossStyles />
 
       {/* Top bar */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
             {businessName || "Your Taxi"}
@@ -293,13 +293,16 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
         <button
           onClick={handleToggleOnline}
           disabled={isBusy}
-          className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium cursor-pointer disabled:cursor-default ${
+          className={`flex items-center gap-2 self-start rounded-full px-4 py-2 text-xs sm:text-sm font-medium cursor-pointer disabled:cursor-default ${
             isBusy ? "emboss-toggle-on" : online ? "emboss-toggle-on" : "emboss-toggle-off"
           }`}
           style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
         >
-          <Circle size={9} fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
-          {isBusy ? "On a trip — hidden from new bookings" : online ? "Online — accepting bookings" : "Offline"}
+          <Circle size={9} className="shrink-0" fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
+          <span className="sm:hidden">{isBusy ? "On a trip" : online ? "Online" : "Offline"}</span>
+          <span className="hidden sm:inline">
+            {isBusy ? "On a trip — hidden from new bookings" : online ? "Online — accepting bookings" : "Offline"}
+          </span>
         </button>
       </div>
 
