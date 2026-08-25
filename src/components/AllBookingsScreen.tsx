@@ -130,6 +130,14 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
         .from("bookings")
         .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected")
         .eq("driver_id", driverId)
+        // Exclude bookings the passenger hasn't actually paid for yet —
+        // a booking sits in "awaiting_payment" between PaymentIntent
+        // creation and the passenger confirming payment; it only
+        // becomes a real booking once confirm-booking-payment verifies
+        // the charge with Stripe and flips it to "pending". Showing it
+        // here before that would mean a driver "receives" bookings
+        // nobody has paid for.
+        .neq("status", "awaiting_payment")
         .order("scheduled_time", { ascending: true });
 
       if (cancelled) return;
