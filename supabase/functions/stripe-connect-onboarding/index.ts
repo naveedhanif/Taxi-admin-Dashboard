@@ -1,17 +1,23 @@
 // supabase/functions/stripe-connect-onboarding/index.ts
 //
-// Creates (if needed) a Stripe Express Connect account for a driver and
-// returns a fresh Account Link URL for Stripe's hosted onboarding flow.
-// This is the real, documented Stripe Connect Express pattern — see
-// https://docs.stripe.com/connect/express-accounts.
+// Creates (if needed) a Stripe Connect account for a driver and returns
+// a fresh Account Link URL for Stripe's hosted onboarding flow.
 //
-// The dashboard's StripeOnboardingScreen calls this, then redirects the
-// browser to the returned url. Stripe redirects back to `return_url` on
-// success and `refresh_url` if the link expired or the driver needs to
-// restart onboarding.
+// Uses the Accounts v2 API (/v2/core/accounts + /v2/core/account_links),
+// NOT the older v1 accounts.create/accountLinks.create SDK helpers. This
+// project's Stripe account has v1 Connect account creation disabled
+// (Stripe's new-integration default), which is what caused:
+//   "Stripe no longer recommends Accounts v1 for new Connect
+//   integrations. Create connected accounts with POST /v2/core/accounts
+//   instead."
+// v2 endpoints aren't yet exposed as typed methods on the stripe-node
+// SDK (still preview), so this calls them directly via fetch with the
+// documented Stripe-Version header. See:
+//   https://docs.stripe.com/connect/saas/tasks/create
+//   https://docs.stripe.com/api/v2/core/account-links/create
 //
 // NOT LIVE-TESTED — this sandbox has no network path to api.stripe.com.
-// Written to match Stripe's documented Connect + Account Links API
+// Written to match Stripe's documented v2 request/response shapes
 // exactly. Test against a real Stripe test-mode key once deployed.
 //
 // Deploy: supabase functions deploy stripe-connect-onboarding
@@ -20,16 +26,39 @@
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY - auto-provided by Supabase
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import Stripe from "npm:stripe@17";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Preview version required for v2/core/accounts and v2/core/account_links
+// as of Stripe's docs at the time this was written. If Stripe stabilizes
+// v2 and you see a deprecation warning for this exact version string,
+// check https://docs.stripe.com/upgrades for the current recommended
+// value and update here.
+const STRIPE_API_VERSION = "2025-11-17.preview";
+
 interface OnboardingRequest {
   return_url: string;
   refresh_url: string;
+}
+
+async function stripeV2Fetch(path: string, body: unknown) {
+  const res = await fetch(`https://api.stripe.com/v2${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("STRIPE_SECRET_KEY")}`,
+      "Stripe-Version": STRIPE_API_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Stripe v2 API error (${res.status})`);
+  }
+  return data;
 }
 
 Deno.serve(async (req) => {
@@ -74,21 +103,31 @@ Deno.serve(async (req) => {
       return jsonError("No driver account found for this user", 404);
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-06-20" });
-
-    // ---- Create the Express account if this driver doesn't have one yet ----
+    // ---- Create the connected account (v2) if this driver doesn't have one yet ----
     let accountId = driver.stripe_connect_account_id;
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: "express",
-        email: driver.email ?? undefined,
-        business_type: "individual",
-        business_profile: {
-          name: driver.business_name ?? undefined,
+      const account = await stripeV2Fetch("/core/accounts", {
+        contact_email: driver.email ?? undefined,
+        display_name: driver.business_name ?? undefined,
+        dashboard: "express",
+        identity: {
+          country: "ie",
+          entity_type: "individual",
         },
-        capabilities: {
-          transfers: { requested: true },
-          card_payments: { requested: true },
+        configuration: {
+          merchant: {
+            capabilities: {
+              card_payments: { requested: true },
+            },
+          },
+        },
+        defaults: {
+          currency: "eur",
+          responsibilities: {
+            fees_collector: "stripe",
+            losses_collector: "stripe",
+          },
+          locales: ["en-IE"],
         },
       });
       accountId = account.id;
@@ -103,14 +142,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- Create a fresh Account Link for hosted onboarding ----
+    // ---- Create a fresh Account Link (v2) for hosted onboarding ----
     // Account Links expire after a few minutes, so this is always
     // generated fresh on demand rather than cached.
-    const accountLink = await stripe.accountLinks.create({
+    const accountLink = await stripeV2Fetch("/core/account_links", {
       account: accountId,
-      type: "account_onboarding",
-      return_url: body.return_url,
-      refresh_url: body.refresh_url,
+      use_case: {
+        type: "account_onboarding",
+        account_onboarding: {
+          configurations: ["merchant"],
+          refresh_url: body.refresh_url,
+          return_url: body.return_url,
+        },
+      },
     });
 
     return new Response(

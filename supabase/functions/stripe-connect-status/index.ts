@@ -1,16 +1,21 @@
 // supabase/functions/stripe-connect-status/index.ts
 //
-// Checks a driver's Stripe Express account status and syncs
-// drivers.stripe_connect_onboarded in the database. Call this when the
-// driver lands back on the dashboard after Stripe's hosted onboarding
-// (the return_url from stripe-connect-onboarding) — Stripe doesn't push
-// a webhook synchronously, so the dashboard polls this once on return
-// instead of waiting on webhook infrastructure.
+// Checks a driver's Stripe Connect account status (Accounts v2) and
+// syncs drivers.stripe_connect_onboarded in the database. Call this
+// when the driver lands back on the dashboard after Stripe's hosted
+// onboarding (the return_url from stripe-connect-onboarding) — Stripe
+// doesn't push a webhook synchronously, so the dashboard polls this
+// once on return instead of waiting on webhook infrastructure.
+//
+// Uses GET /v2/core/accounts/{id} with the merchant capability included,
+// NOT stripe.accounts.retrieve() (v1) — v2 accounts don't have a flat
+// charges_enabled/details_submitted shape; status lives at
+// configuration.merchant.capabilities.card_payments.status. See
+// stripe-connect-onboarding/index.ts for why v1 isn't usable here.
 //
 // For production hardening later: add a Stripe webhook listening for
-// `account.updated` as the source of truth, and use this endpoint only
-// as a fallback/manual-refresh. This is a reasonable v1 given no webhook
-// endpoint exists yet.
+// `v2.core.account[configuration.merchant].updated` as the source of
+// truth, and use this endpoint only as a fallback/manual-refresh.
 //
 // NOT LIVE-TESTED — see stripe-connect-onboarding/index.ts for context.
 //
@@ -18,12 +23,14 @@
 // Required secrets: STRIPE_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import Stripe from "npm:stripe@17";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Keep in sync with stripe-connect-onboarding/index.ts.
+const STRIPE_API_VERSION = "2025-11-17.preview";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -65,10 +72,30 @@ Deno.serve(async (req) => {
       );
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-06-20" });
-    const account = await stripe.accounts.retrieve(driver.stripe_connect_account_id);
+    const res = await fetch(
+      `https://api.stripe.com/v2/core/accounts/${driver.stripe_connect_account_id}?include=configuration.merchant,requirements`,
+      {
+        headers: {
+          Authorization: `Bearer ${Deno.env.get("STRIPE_SECRET_KEY")}`,
+          "Stripe-Version": STRIPE_API_VERSION,
+        },
+      }
+    );
+    const account = await res.json();
+    if (!res.ok) {
+      throw new Error(account?.error?.message || `Stripe v2 API error (${res.status})`);
+    }
 
-    const onboarded = Boolean(account.details_submitted && account.charges_enabled);
+    const cardPaymentsStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status;
+    const payoutsStatus = account?.configuration?.merchant?.capabilities?.stripe_balance?.payouts?.status;
+    const chargesEnabled = cardPaymentsStatus === "active";
+    const payoutsEnabled = payoutsStatus === "active";
+    // "Onboarded" for this app's purposes: card payments are active and
+    // there's nothing currently blocking the account. v2 doesn't have a
+    // single details_submitted flag like v1 — requirements.currently_due
+    // being empty is the closest equivalent.
+    const hasOutstandingRequirements = (account?.requirements?.currently_due?.length ?? 0) > 0;
+    const onboarded = chargesEnabled && !hasOutstandingRequirements;
 
     const { error: updateError } = await supabase
       .from("drivers")
@@ -80,11 +107,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        onboarded,
-        chargesEnabled: Boolean(account.charges_enabled),
-        payoutsEnabled: Boolean(account.payouts_enabled),
-      }),
+      JSON.stringify({ onboarded, chargesEnabled, payoutsEnabled }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (err) {
