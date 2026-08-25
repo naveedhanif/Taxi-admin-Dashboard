@@ -30,7 +30,7 @@ const corsHeaders = {
 };
 
 // Keep in sync with stripe-connect-onboarding/index.ts.
-const STRIPE_API_VERSION = "2025-11-17.preview";
+const STRIPE_API_VERSION = "2026-07-29.dahlia";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {

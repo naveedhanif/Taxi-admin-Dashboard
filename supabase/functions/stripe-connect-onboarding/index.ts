@@ -32,12 +32,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Preview version required for v2/core/accounts and v2/core/account_links
-// as of Stripe's docs at the time this was written. If Stripe stabilizes
-// v2 and you see a deprecation warning for this exact version string,
-// check https://docs.stripe.com/upgrades for the current recommended
-// value and update here.
-const STRIPE_API_VERSION = "2025-11-17.preview";
+// Stable (non-preview) GA version as of when this was last checked.
+// v2/core/accounts and v2/core/account_links are stable at this version
+// for the "full dashboard + Stripe collects fees/losses" combination
+// used below. If Stripe returns a version-related error, check
+// https://docs.stripe.com/api/versioning for the current GA version.
+const STRIPE_API_VERSION = "2026-07-29.dahlia";
 
 interface OnboardingRequest {
   return_url: string;
@@ -109,7 +109,17 @@ Deno.serve(async (req) => {
       const account = await stripeV2Fetch("/core/accounts", {
         contact_email: driver.email ?? undefined,
         display_name: driver.business_name ?? undefined,
-        dashboard: "express",
+        // "full" dashboard access + Stripe collecting fees/losses is
+        // Stripe's documented default combination (see the code sample
+        // at https://docs.stripe.com/connect/saas/tasks/create). The
+        // "express" dashboard + Stripe-collects-losses combination is
+        // still in preview and requires embedded components (onboarding,
+        // account management, notification banner) that this app
+        // doesn't have — using it caused "This account configuration is
+        // not supported" since none of the extra preview requirements
+        // were met. Full dashboard access avoids that entirely: drivers
+        // manage their Stripe account at dashboard.stripe.com directly.
+        dashboard: "full",
         identity: {
           country: "ie",
           entity_type: "individual",
