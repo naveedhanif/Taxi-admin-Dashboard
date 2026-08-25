@@ -90,8 +90,8 @@ export default function App() {
 
       {/* Top bar — branding + onboarding/dashboard mode toggle only.
           Screen navigation lives in the left sidebar now. */}
-      <header className="sticky top-0 z-40 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 backdrop-blur-md px-4 py-3">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+      <header className="sticky top-0 z-40 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 backdrop-blur-md px-6 py-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {viewMode === "dashboard" && driverId && (
               <>
@@ -130,47 +130,42 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setViewMode("onboarding")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all ${
-                viewMode === "onboarding"
-                  ? "emboss-btn-primary text-white"
-                  : "emboss-btn text-[#5F5E5A] hover:text-[#2C2C2A]"
-              }`}
-            >
-              <Compass size={13} />
-              <span className="hidden sm:inline">Onboarding Flow (Steps 1-5)</span>
-              <span className="sm:hidden">Onboarding</span>
-            </button>
+            {/* Onboarding is only for drivers who haven't set up an
+                account yet. Once driverId exists, jumping back into
+                onboarding makes no sense and risks a returning driver
+                accidentally re-running setup — so it's hidden entirely. */}
+            {!driverId && (
+              <>
+                <button
+                  onClick={() => setViewMode("onboarding")}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all ${
+                    viewMode === "onboarding"
+                      ? "emboss-btn-primary text-white"
+                      : "emboss-btn text-[#5F5E5A] hover:text-[#2C2C2A]"
+                  }`}
+                >
+                  <Compass size={13} />
+                  <span className="hidden sm:inline">Onboarding Flow (Steps 1-5)</span>
+                  <span className="sm:hidden">Onboarding</span>
+                </button>
 
-            <button
-              onClick={() => setViewMode("dashboard")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all ${
-                viewMode === "dashboard"
-                  ? "emboss-btn-primary text-white"
-                  : "emboss-btn text-[#5F5E5A] hover:text-[#2C2C2A]"
-              }`}
-            >
-              <LayoutDashboard size={13} />
-              <span className="hidden sm:inline">Driver Dashboard View</span>
-              <span className="sm:hidden">Dashboard</span>
-            </button>
+                <button
+                  onClick={() => { setViewMode("dashboard"); setDashboardScreen("login"); }}
+                  className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-[#5F5E5A] hover:text-[#2C2C2A] cursor-pointer transition-all"
+                >
+                  <LogIn size={13} />
+                  <span>Log in</span>
+                </button>
+              </>
+            )}
 
-            {driverId ? (
+            {driverId && (
               <button
                 onClick={handleLogout}
                 className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-[#991B1B] cursor-pointer transition-all"
               >
                 <LogOut size={13} />
                 <span>Log out</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => { setViewMode("dashboard"); setDashboardScreen("login"); }}
-                className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-[#5F5E5A] hover:text-[#2C2C2A] cursor-pointer transition-all"
-              >
-                <LogIn size={13} />
-                <span>Log in</span>
               </button>
             )}
           </div>
@@ -229,7 +224,7 @@ export default function App() {
           </div>
         </main>
       ) : (
-        <div className="mx-auto flex max-w-7xl">
+        <div className="flex w-full">
           {/* Left sidebar nav — desktop: fixed column. Mobile: slide-over. */}
           {driverId && (
             <>
@@ -284,7 +279,7 @@ export default function App() {
           )}
 
           <main className="min-w-0 flex-1 py-6">
-            <div className="px-4">
+            <div className="px-6">
               {dashboardScreen === "overview" && <OverviewDashboard driverId={driverId} onNavigate={(s) => setDashboardScreen(s as any)} />}
               {dashboardScreen === "login" && (
                 <LoginScreen

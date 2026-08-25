@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CreditCard, ExternalLink, CheckCircle2, ShieldCheck, ArrowRight, Building, Clock, RefreshCw, AlertCircle } from "lucide-react";
+import { CreditCard, ExternalLink, CheckCircle2, ShieldCheck, ArrowRight, Building, Clock, RefreshCw, AlertCircle, DollarSign } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 function useGoogleFont() {
