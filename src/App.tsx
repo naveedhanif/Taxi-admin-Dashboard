@@ -43,6 +43,7 @@ export default function App() {
   // current session on load, then again on every sign-in/sign-out — this
   // is the one source of truth for "who's logged in right now."
   const [driverId, setDriverId] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
@@ -55,9 +56,17 @@ export default function App() {
         if (result.driverId) {
           setViewMode("dashboard");
           setDashboardScreen("overview");
+
+          const { data } = await supabase
+            .from("drivers")
+            .select("business_name")
+            .eq("id", result.driverId)
+            .single();
+          setBusinessName(data?.business_name ?? null);
         }
       } else {
         setDriverId(null);
+        setBusinessName(null);
       }
       setSessionChecked(true);
     });
@@ -66,6 +75,27 @@ export default function App() {
   }, []);
 
   const { notifications, dismiss } = useNewBookingNotifications(driverId);
+
+  // Keep the header name in sync if the driver edits their business name
+  // in Settings — same tab or another device, without needing a refresh.
+  useEffect(() => {
+    if (!driverId) return;
+    const channel = supabase
+      .channel(`driver-business-name-${driverId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "drivers", filter: `id=eq.${driverId}` },
+        (payload) => {
+          if (payload.new && "business_name" in payload.new) {
+            setBusinessName(payload.new.business_name as string);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driverId]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -124,7 +154,7 @@ export default function App() {
             </div>
             <div>
               <div className="text-base font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-                John's Taxi <span className="text-xs font-normal text-[#5F5E5A]">— Driver SaaS</span>
+                {businessName || "Driver Dashboard"} <span className="text-xs font-normal text-[#5F5E5A]">— Driver SaaS</span>
               </div>
             </div>
           </div>
