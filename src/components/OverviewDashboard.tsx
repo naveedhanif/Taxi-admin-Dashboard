@@ -166,11 +166,17 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
     // still in progress should still count. Checked separately from the
     // today-only list above so a driver mid-trip past midnight doesn't
     // get incorrectly shown as free.
+    //
+    // busy_expires_at excludes trips that have run far past their
+    // estimated duration + a safety buffer — protects against a driver
+    // forgetting to mark a trip complete, which would otherwise show
+    // "busy" here forever. Mirrors public_driver_profiles / create-booking.
     const { count: activeCount } = await supabase
       .from("bookings")
       .select("id", { count: "exact", head: true })
       .eq("driver_id", driverId)
-      .in("status", ACTIVE_TRIP_STATUSES);
+      .in("status", ACTIVE_TRIP_STATUSES)
+      .or(`busy_expires_at.is.null,busy_expires_at.gt.${new Date().toISOString()}`);
     setActiveTripCount(activeCount ?? 0);
 
     // Last 7 days of completed bookings, grouped by day for the earnings chart
