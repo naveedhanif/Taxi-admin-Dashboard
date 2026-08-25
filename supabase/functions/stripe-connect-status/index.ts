@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     // v2 list/array params use indexed query keys (include[0]=...,
     // include[1]=...), not a comma-joined single value — a single CSV
     // string here was rejected as an "unrecognized enum value".
-    const includeParams = ["configuration.merchant", "requirements"]
+    const includeParams = ["configuration.merchant", "configuration.recipient", "requirements"]
       .map((v, i) => `include[${i}]=${encodeURIComponent(v)}`)
       .join("&");
 
@@ -94,15 +94,18 @@ Deno.serve(async (req) => {
     }
 
     const cardPaymentsStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status;
-    const payoutsStatus = account?.configuration?.merchant?.capabilities?.stripe_balance?.payouts?.status;
+    // The capability that actually lets money move to this account —
+    // this is what create-booking's transfer_data.destination depends on.
+    const transfersStatus = account?.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers?.status;
     const chargesEnabled = cardPaymentsStatus === "active";
-    const payoutsEnabled = payoutsStatus === "active";
-    // "Onboarded" for this app's purposes: card payments are active and
-    // there's nothing currently blocking the account. v2 doesn't have a
-    // single details_submitted flag like v1 — requirements.currently_due
-    // being empty is the closest equivalent.
+    const payoutsEnabled = transfersStatus === "active";
+    // "Onboarded" for this app's purposes: card payments AND the ability
+    // to actually receive transferred funds are both active, with
+    // nothing currently blocking the account. v2 doesn't have a single
+    // details_submitted flag like v1 — requirements.currently_due being
+    // empty is the closest equivalent.
     const hasOutstandingRequirements = (account?.requirements?.currently_due?.length ?? 0) > 0;
-    const onboarded = chargesEnabled && !hasOutstandingRequirements;
+    const onboarded = chargesEnabled && payoutsEnabled && !hasOutstandingRequirements;
 
     const { error: updateError } = await supabase
       .from("drivers")

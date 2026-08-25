@@ -130,6 +130,27 @@ Deno.serve(async (req) => {
               card_payments: { requested: true },
             },
           },
+          // REQUIRED for this driver to actually receive money. `merchant`
+          // alone lets the account accept payments but has nowhere to send
+          // them — create-booking's transfer_data.destination needs the
+          // recipient configuration's stripe_transfers capability, or
+          // Stripe rejects the PaymentIntent with:
+          //   "Your destination account needs to have at least one of the
+          //   following capabilities enabled: transfers, ... Or, if you
+          //   use the /v2/core/accounts API, your destination account
+          //   needs to have the
+          //   configurations.recipient.capabilities.stripe_balance.stripe_transfers
+          //   capability enabled."
+          // See https://docs.stripe.com/connect/accounts-v2 — recipient
+          // capability is stripe_balance.stripe_transfers, replacing v1's
+          // flat "transfers" capability.
+          recipient: {
+            capabilities: {
+              stripe_balance: {
+                stripe_transfers: { requested: true },
+              },
+            },
+          },
         },
         defaults: {
           currency: "eur",
@@ -150,17 +171,40 @@ Deno.serve(async (req) => {
       if (updateError) {
         return jsonError(`Created Stripe account but failed to save it: ${updateError.message}`, 500);
       }
+    } else {
+      // ---- Existing account: make sure it has the recipient capability ----
+      // A driver who connected BEFORE this fix only has the merchant
+      // configuration, so their account can accept payments but has no
+      // way to receive the transferred funds — exactly the error this
+      // whole change addresses. Requesting the capability again on an
+      // existing account is safe and idempotent; Stripe just adds the
+      // missing configuration if it isn't there yet.
+      await stripeV2Fetch(`/core/accounts/${accountId}`, {
+        configuration: {
+          recipient: {
+            capabilities: {
+              stripe_balance: {
+                stripe_transfers: { requested: true },
+              },
+            },
+          },
+        },
+      });
     }
 
     // ---- Create a fresh Account Link (v2) for hosted onboarding ----
     // Account Links expire after a few minutes, so this is always
-    // generated fresh on demand rather than cached.
+    // generated fresh on demand rather than cached. Both configurations
+    // are requested so a driver missing the recipient capability (e.g.
+    // an existing account backfilled above) is walked through whatever
+    // Stripe needs to actually activate it, not just re-shown the
+    // merchant flow they already completed.
     const accountLink = await stripeV2Fetch("/core/account_links", {
       account: accountId,
       use_case: {
         type: "account_onboarding",
         account_onboarding: {
-          configurations: ["merchant"],
+          configurations: ["merchant", "recipient"],
           refresh_url: body.refresh_url,
           return_url: body.return_url,
         },
