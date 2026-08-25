@@ -108,7 +108,13 @@ function startOfDay(d: Date) {
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const ACTIVE_TRIP_STATUSES = ["confirmed", "en_route", "arrived", "in_progress"];
+// A driver is "busy" (hidden from new bookings, shown as unavailable)
+// from the moment a booking is confirmed as paid — "pending" onward.
+// awaiting_payment is deliberately excluded: that status means a
+// PaymentIntent exists but the passenger hasn't completed payment yet,
+// so it isn't a real booking and shouldn't lock the driver or show up
+// on the dashboard. See create-booking and confirm-booking-payment.
+const ACTIVE_TRIP_STATUSES = ["pending", "confirmed", "en_route", "arrived", "in_progress"];
 
 export default function OverviewDashboard({ driverId, onNavigate }: { driverId: string | null; onNavigate?: (screen: string) => void }) {
   useGoogleFont();
@@ -147,6 +153,9 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
       .from("bookings")
       .select("id, passenger_name, pickup_address, dropoff_address, scheduled_time, status, estimated_fare, final_fare")
       .eq("driver_id", driverId)
+      // Same exclusion as AllBookingsScreen — an unpaid awaiting_payment
+      // booking isn't a real booking yet and shouldn't show up here.
+      .neq("status", "awaiting_payment")
       .gte("scheduled_time", todayStart.toISOString())
       .lt("scheduled_time", todayEnd.toISOString())
       .order("scheduled_time");
