@@ -72,8 +72,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // v2 list/array params use indexed query keys (include[0]=...,
+    // include[1]=...), not a comma-joined single value — a single CSV
+    // string here was rejected as an "unrecognized enum value".
+    const includeParams = ["configuration.merchant", "requirements"]
+      .map((v, i) => `include[${i}]=${encodeURIComponent(v)}`)
+      .join("&");
+
     const res = await fetch(
-      `https://api.stripe.com/v2/core/accounts/${driver.stripe_connect_account_id}?include=configuration.merchant,requirements`,
+      `https://api.stripe.com/v2/core/accounts/${driver.stripe_connect_account_id}?${includeParams}`,
       {
         headers: {
           Authorization: `Bearer ${Deno.env.get("STRIPE_SECRET_KEY")}`,
