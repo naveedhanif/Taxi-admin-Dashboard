@@ -56,7 +56,15 @@ async function stripeV2Fetch(path: string, body: unknown) {
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data?.error?.message || `Stripe v2 API error (${res.status})`);
+    // Surface the full Stripe error object (code/type), not just the
+    // message — the message alone ("Permission denied...") wasn't
+    // specific enough to diagnose whether this was a key/mode mismatch,
+    // a platform Connect setup issue, or something else. code/type are
+    // what actually distinguish those cases.
+    console.error("Stripe v2 API error:", JSON.stringify(data?.error ?? data));
+    const err = data?.error;
+    const detail = err ? ` [code=${err.code ?? "?"}, type=${err.type ?? "?"}]` : "";
+    throw new Error((err?.message || `Stripe v2 API error (${res.status})`) + detail);
   }
   return data;
 }
