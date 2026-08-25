@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, Wallet, Check, Banknote, CreditCard } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 export interface Booking {
@@ -12,6 +12,12 @@ export interface Booking {
   estimated_fare: number | null;
   final_fare: number | null;
   status: "pending" | "confirmed" | "en_route" | "arrived" | "in_progress" | "completed" | "canceled";
+  payment_timing: "now" | "later";
+  payment_method: "card" | "cash" | null;
+  deposit_amount: number;
+  deposit_payment_status: "unpaid" | "paid" | "refunded" | "forfeited";
+  balance_due: number | null;
+  balance_collected: boolean;
 }
 
 function useGoogleFont() {
@@ -122,7 +128,7 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, scheduled_time, estimated_fare, final_fare, status")
+        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected")
         .eq("driver_id", driverId)
         .order("scheduled_time", { ascending: true });
 
@@ -195,6 +201,30 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
     );
     if (selectedBooking && selectedBooking.id === id) {
       setSelectedBooking((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
+  };
+
+  // For pay-later bookings: the driver collects the remaining balance
+  // directly (cash or card reader) after the ride, outside Stripe — this
+  // just records how it was paid, it doesn't move any money itself.
+  const markBalanceCollected = async (id: string, method: "cash" | "card") => {
+    setUpdatingId(id);
+    const { error } = await supabase
+      .from("bookings")
+      .update({ payment_method: method, balance_collected: true })
+      .eq("id", id);
+    setUpdatingId(null);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setBookingsList((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, payment_method: method, balance_collected: true } : b))
+    );
+    if (selectedBooking && selectedBooking.id === id) {
+      setSelectedBooking((prev) => (prev ? { ...prev, payment_method: method, balance_collected: true } : null));
     }
   };
 
@@ -305,7 +335,20 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
                     <div className="text-sm font-bold text-[#2C2C2A]">
                       €{(b.final_fare ?? b.estimated_fare ?? 0).toFixed(2)}
                     </div>
-                    <StatusPill status={b.status} />
+                    <div className="flex items-center justify-end gap-1.5">
+                      <StatusPill status={b.status} />
+                      {b.payment_timing === "later" && (
+                        <span
+                          className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background: b.balance_collected ? "#EAF3DE" : "#FAEEDA",
+                            color: b.balance_collected ? "#27500A" : "#633806",
+                          }}
+                        >
+                          <Wallet size={9} /> {b.balance_collected ? "Collected" : "Pay in taxi"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <ChevronRight size={16} className="text-[#B4B2A9]" />
                 </div>
@@ -366,7 +409,58 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
                   €{(selectedBooking.final_fare ?? selectedBooking.estimated_fare ?? 0).toFixed(2)}
                 </span>
               </div>
+
+              {selectedBooking.payment_timing === "later" && (
+                <div className="rounded-lg border border-[#E4E2DA] bg-[#FAEEDA] p-3 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#633806]">
+                    <Wallet size={11} /> Pay in taxi — deposit booking
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#5F5E5A]">Deposit paid (Stripe)</span>
+                    <span className="font-semibold text-[#2C2C2A]">€{Number(selectedBooking.deposit_amount).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#5F5E5A]">Balance owed to you</span>
+                    <span className="font-semibold text-[#2C2C2A]">€{Number(selectedBooking.balance_due ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-dashed border-[#E4C99A]">
+                    <span className="text-[#5F5E5A]">Collected?</span>
+                    {selectedBooking.balance_collected ? (
+                      <span className="flex items-center gap-1 font-semibold text-[#27500A]">
+                        <Check size={12} /> Yes, via {selectedBooking.payment_method}
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-[#991B1B]">Not yet</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {selectedBooking.payment_timing === "later" && !selectedBooking.balance_collected && (
+              <div className="mt-5 border-t border-[#E4E2DA] pt-4">
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
+                  Mark balance as collected:
+                  {updatingId === selectedBooking.id && <Loader2 size={12} className="animate-spin" />}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    disabled={updatingId === selectedBooking.id}
+                    onClick={() => markBalanceCollected(selectedBooking.id, "cash")}
+                    className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer disabled:opacity-60"
+                  >
+                    <Banknote size={13} /> Paid cash
+                  </button>
+                  <button
+                    disabled={updatingId === selectedBooking.id}
+                    onClick={() => markBalanceCollected(selectedBooking.id, "card")}
+                    className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer disabled:opacity-60"
+                  >
+                    <CreditCard size={13} /> Paid by card
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Status Action Buttons */}
             <div className="mt-5 border-t border-[#E4E2DA] pt-4">

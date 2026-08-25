@@ -108,13 +108,14 @@ function startOfDay(d: Date) {
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const ACTIVE_TRIP_STATUSES = ["en_route", "arrived", "in_progress"];
+const ACTIVE_TRIP_STATUSES = ["confirmed", "en_route", "arrived", "in_progress"];
 
 export default function OverviewDashboard({ driverId, onNavigate }: { driverId: string | null; onNavigate?: (screen: string) => void }) {
   useGoogleFont();
   const [businessName, setBusinessName] = useState("");
   const [online, setOnline] = useState(true);
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
+  const [activeTripCount, setActiveTripCount] = useState(0);
   const [weeklyEarnings, setWeeklyEarnings] = useState<{ day: string; amount: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -150,6 +151,18 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
       .lt("scheduled_time", todayEnd.toISOString())
       .order("scheduled_time");
     setTodayBookings(todayData ?? []);
+
+    // Busy/available state (mirrors public_driver_profiles.is_available)
+    // is NOT limited to "today" — a trip that started yesterday and is
+    // still in progress should still count. Checked separately from the
+    // today-only list above so a driver mid-trip past midnight doesn't
+    // get incorrectly shown as free.
+    const { count: activeCount } = await supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("driver_id", driverId)
+      .in("status", ACTIVE_TRIP_STATUSES);
+    setActiveTripCount(activeCount ?? 0);
 
     // Last 7 days of completed bookings, grouped by day for the earnings chart
     const weekAgo = new Date(todayStart);
@@ -213,6 +226,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
     .filter((b) => b.status === "completed")
     .reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
   const activeTrip = todayBookings.find((b) => ACTIVE_TRIP_STATUSES.includes(b.status));
+  const isBusy = activeTripCount > 0;
   const nextUpcoming = todayBookings.find((b) => b.status === "pending" || b.status === "confirmed");
 
   const statusCounts: Record<string, number> = {};
@@ -269,11 +283,14 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
         </div>
         <button
           onClick={handleToggleOnline}
-          className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium cursor-pointer ${online ? "emboss-toggle-on" : "emboss-toggle-off"}`}
-          style={{ color: online ? "#3B6D11" : "#5F5E5A" }}
+          disabled={isBusy}
+          className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium cursor-pointer disabled:cursor-default ${
+            isBusy ? "emboss-toggle-on" : online ? "emboss-toggle-on" : "emboss-toggle-off"
+          }`}
+          style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
         >
-          <Circle size={9} fill={online ? "#639922" : "#B4B2A9"} stroke="none" />
-          {online ? "Online — accepting bookings" : "Offline"}
+          <Circle size={9} fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
+          {isBusy ? "On a trip — hidden from new bookings" : online ? "Online — accepting bookings" : "Offline"}
         </button>
       </div>
 
