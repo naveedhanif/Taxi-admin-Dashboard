@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "./supabaseClient";
 
 export interface BookingNotification {
@@ -9,6 +9,8 @@ export interface BookingNotification {
   scheduled_time: string;
   estimated_fare: number;
 }
+
+const ACTIVE_STATUSES = ["pending", "confirmed", "en_route", "arrived", "in_progress"];
 
 /**
  * Subscribes to real-time booking notifications for one driver — fires
@@ -23,6 +25,15 @@ export interface BookingNotification {
  * "pending" only after independently verifying the charge with Stripe —
  * that's the real "a passenger just booked you" moment.
  *
+ * Also tracks unviewedCount — how many of the driver's active bookings
+ * have never been opened (bookings.driver_viewed_at is null). This
+ * drives the sidebar badge (e.g. "3" next to Bookings) and, where the
+ * browser/OS supports it, the REAL app icon badge on the home screen
+ * via the Badging API — the actual "1, 2, 3..." number-on-the-icon
+ * behavior. Loaded fresh from the database on mount so it's correct
+ * even for bookings that arrived before this tab was open, then kept
+ * live via the same realtime subscription used for toasts.
+ *
  * NOT LIVE-TESTED against a real websocket connection — this sandbox
  * has no network path to Supabase's realtime endpoint. The
  * subscription code follows Supabase's documented Realtime API
@@ -34,7 +45,44 @@ export interface BookingNotification {
  */
 export function useNewBookingNotifications(driverId: string | null) {
   const [notifications, setNotifications] = useState<BookingNotification[]>([]);
+  const [unviewedCount, setUnviewedCount] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const refreshUnviewedCount = useCallback(async () => {
+    if (!driverId) return;
+    const { count } = await supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("driver_id", driverId)
+      .in("status", ACTIVE_STATUSES)
+      .is("driver_viewed_at", null);
+    const n = count ?? 0;
+    setUnviewedCount(n);
+
+    // Real OS-level app icon badge, where supported (Chrome/Edge on
+    // Android and desktop when the PWA is installed to the home screen;
+    // NOT supported in Safari/iOS as of this writing — the in-app
+    // sidebar badge is the reliable cross-browser fallback for that
+    // case). setAppBadge/clearAppBadge fail if called outside an
+    // installed-PWA context on some browsers, hence the try/catch.
+    if ("setAppBadge" in navigator) {
+      try {
+        if (n > 0) {
+          // @ts-expect-error — Badging API isn't in all TS lib versions yet
+          navigator.setAppBadge(n);
+        } else {
+          // @ts-expect-error
+          navigator.clearAppBadge();
+        }
+      } catch {
+        // Fails silently outside an installed-PWA context — expected.
+      }
+    }
+  }, [driverId]);
+
+  useEffect(() => {
+    refreshUnviewedCount();
+  }, [refreshUnviewedCount]);
 
   useEffect(() => {
     if (!driverId) return;
@@ -60,6 +108,11 @@ export function useNewBookingNotifications(driverId: string | null) {
               // time, which is expected and fine.
             });
           }
+          // Any change to this driver's bookings (new pending booking,
+          // status moving on, driver_viewed_at being set) can shift the
+          // unviewed count — simplest to just re-derive it from the
+          // database rather than try to patch it incrementally here.
+          refreshUnviewedCount();
         }
       )
       .subscribe();
@@ -67,12 +120,12 @@ export function useNewBookingNotifications(driverId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [driverId]);
+  }, [driverId, refreshUnviewedCount]);
 
   function dismiss(id: string) {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   }
 
-  return { notifications, dismiss, audioRef };
+  return { notifications, dismiss, audioRef, unviewedCount, refreshUnviewedCount };
 }
 

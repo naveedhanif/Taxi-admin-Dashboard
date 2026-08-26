@@ -74,7 +74,7 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const { notifications, dismiss } = useNewBookingNotifications(driverId);
+  const { notifications, dismiss, unviewedCount } = useNewBookingNotifications(driverId);
 
   // Keep the header name in sync if the driver edits their business name
   // in Settings — same tab or another device, without needing a refresh.
@@ -282,7 +282,7 @@ export default function App() {
                         key={item.id}
                         onClick={() => selectScreen(item.id)}
                         title={sidebarCollapsed ? item.label : undefined}
-                        className={`flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-sm font-medium cursor-pointer transition-all text-left ${
+                        className={`relative flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-sm font-medium cursor-pointer transition-all text-left ${
                           sidebarCollapsed ? "lg:justify-center lg:px-0" : ""
                         } ${
                           isActive
@@ -300,6 +300,16 @@ export default function App() {
                       >
                         <Icon size={16} className="shrink-0" />
                         <span className={sidebarCollapsed ? "lg:hidden" : ""}>{item.label}</span>
+                        {item.id === "bookings" && unviewedCount > 0 && (
+                          <span
+                            className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[11px] font-bold text-white ${
+                              sidebarCollapsed ? "lg:absolute lg:right-1 lg:top-1 lg:ml-0" : ""
+                            }`}
+                            style={{ background: "#D64545" }}
+                          >
+                            {unviewedCount > 99 ? "99+" : unviewedCount}
+                          </span>
+                        )}
                       </button>
                     );
                   })}

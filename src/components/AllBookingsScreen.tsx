@@ -19,6 +19,7 @@ export interface Booking {
   deposit_payment_status: "unpaid" | "paid" | "refunded" | "forfeited";
   balance_due: number | null;
   balance_collected: boolean;
+  driver_viewed_at: string | null;
 }
 
 function useGoogleFont() {
@@ -129,7 +130,7 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected")
+        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at")
         .eq("driver_id", driverId)
         // Exclude bookings the passenger hasn't actually paid for yet —
         // a booking sits in "awaiting_payment" between PaymentIntent
@@ -195,9 +196,25 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
       return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
     });
 
+  // Marks a booking as viewed the moment the driver opens its details —
+  // this is what clears it from the unviewed-count badge (sidebar +
+  // real app icon badge, see useNewBookingNotifications.ts). Only
+  // writes once per booking (skips if already viewed) to avoid
+  // needless updates on every re-open.
+  async function handleSelectBooking(booking: Booking) {
+    setSelectedBooking(booking);
+    if (!booking.driver_viewed_at) {
+      const viewedAt = new Date().toISOString();
+      const { error } = await supabase.from("bookings").update({ driver_viewed_at: viewedAt }).eq("id", booking.id);
+      if (!error) {
+        setBookingsList((prev) => prev.map((b) => (b.id === booking.id ? { ...b, driver_viewed_at: viewedAt } : b)));
+        setSelectedBooking((prev) => (prev ? { ...prev, driver_viewed_at: viewedAt } : null));
+      }
+    }
+  }
+
   const updateBookingStatus = async (id: string, newStatus: Booking["status"]) => {
-    setUpdatingId(id);
-    const { error } = await supabase.from("bookings").update({ status: newStatus }).eq("id", id);
+    setUpdatingId(id);    const { error } = await supabase.from("bookings").update({ status: newStatus }).eq("id", id);
     setUpdatingId(null);
 
     if (error) {
@@ -314,7 +331,7 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
             filteredBookings.map((b) => (
               <div
                 key={b.id}
-                onClick={() => setSelectedBooking(b)}
+                onClick={() => handleSelectBooking(b)}
                 className="flex flex-col justify-between rounded-lg border border-[#E4E2DA] p-4 transition-all hover:border-[#185FA5]/40 md:flex-row md:items-center gap-3 cursor-pointer"
               >
                 <div className="flex items-start gap-3">
