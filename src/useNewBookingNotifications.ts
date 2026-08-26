@@ -48,6 +48,23 @@ export function useNewBookingNotifications(driverId: string | null) {
   const [unviewedCount, setUnviewedCount] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // iOS ties the Badging API to notification permission: setAppBadge()
+  // silently no-ops on iOS until the user has granted notifications,
+  // even though the call itself never throws. Ask once per session as
+  // soon as we know who's logged in — Notification.requestPermission()
+  // is allowed here without a click gesture on iOS/Android, unlike some
+  // desktop browsers, so this is safe to fire from an effect.
+  useEffect(() => {
+    if (!driverId) return;
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {
+        // User dismissed or platform blocked it — badge just won't
+        // show on the home screen icon; sidebar badge still works.
+      });
+    }
+  }, [driverId]);
+
   const refreshUnviewedCount = useCallback(async () => {
     if (!driverId) return;
     const { count } = await supabase
@@ -59,12 +76,14 @@ export function useNewBookingNotifications(driverId: string | null) {
     const n = count ?? 0;
     setUnviewedCount(n);
 
-    // Real OS-level app icon badge, where supported (Chrome/Edge on
-    // Android and desktop when the PWA is installed to the home screen;
-    // NOT supported in Safari/iOS as of this writing — the in-app
-    // sidebar badge is the reliable cross-browser fallback for that
-    // case). setAppBadge/clearAppBadge fail if called outside an
-    // installed-PWA context on some browsers, hence the try/catch.
+    // Real OS-level app icon badge. Supported on Chrome/Edge desktop
+    // and, since iOS/iPadOS 16.4, on Safari home-screen web apps too —
+    // but iOS requires notification permission to be granted first (see
+    // the effect above) or the call silently no-ops. NOT supported on
+    // Chrome for Android. The in-app sidebar badge is the reliable
+    // cross-platform fallback everywhere this isn't available.
+    // setAppBadge/clearAppBadge fail if called outside an installed-PWA
+    // context on some browsers, hence the try/catch.
     if ("setAppBadge" in navigator) {
       try {
         if (n > 0) {
