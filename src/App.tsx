@@ -33,11 +33,35 @@ import {
 export default function App() {
   const [viewMode, setViewMode] = useState<"onboarding" | "dashboard">("onboarding");
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
-  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings">("overview");
+  // iOS commonly reloads a backgrounded PWA's page from scratch when the
+  // OS reclaims memory (not just suspends it) — every in-memory React
+  // state, including which screen the driver was on, was lost, so it
+  // always came back to the app on "overview" no matter where the
+  // driver actually left off. Persisting to localStorage and reading it
+  // back on mount means the freshly-reloaded page restores the real
+  // last screen instead of the default.
+  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings">(() => {
+    try {
+      const saved = localStorage.getItem("taxi_admin_dashboard_screen");
+      if (saved === "overview" || saved === "bookings" || saved === "settings") return saved;
+    } catch {
+      // Ignore — storage unavailable, just use the default.
+    }
+    return "overview";
+  });
   // Mobile: drawer is closed by default, opened via hamburger.
   // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("taxi_admin_dashboard_screen", dashboardScreen);
+    } catch {
+      // Ignore — storage unavailable, this just means the next reload
+      // falls back to the default instead of persisting.
+    }
+  }, [dashboardScreen]);
 
   // Real session tracking. onAuthStateChange fires immediately with the
   // current session on load, then again on every sign-in/sign-out — this
@@ -47,7 +71,7 @@ export default function App() {
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const result = await getDriverForUser(session.user.id);
         setDriverId(result.driverId);
@@ -55,7 +79,16 @@ export default function App() {
         // skip onboarding entirely.
         if (result.driverId) {
           setViewMode("dashboard");
-          setDashboardScreen("overview");
+          // Only force back to Overview on a REAL new sign-in — not on
+          // "INITIAL_SESSION" (fires on every page load/reload, including
+          // whenever iOS reloads a backgrounded PWA's page) or
+          // "TOKEN_REFRESHED" (fires periodically in the background).
+          // Treating every one of those as if it were a fresh sign-in is
+          // exactly what kept resetting the driver back to Dashboard no
+          // matter which screen they'd actually been on.
+          if (event === "SIGNED_IN") {
+            setDashboardScreen("overview");
+          }
 
           const { data } = await supabase
             .from("drivers")
@@ -101,6 +134,11 @@ export default function App() {
     await supabase.auth.signOut();
     setDriverId(null);
     setDashboardScreen("login");
+    try {
+      localStorage.removeItem("taxi_admin_dashboard_screen");
+    } catch {
+      // Ignore.
+    }
   }
 
   const navigationItems = [
