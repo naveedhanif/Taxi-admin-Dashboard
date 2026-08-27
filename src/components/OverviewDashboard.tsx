@@ -60,14 +60,14 @@ function EmbossStyles() {
   );
 }
 
-function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+function StatCard({ label, value, sub, accent, className = "" }: { label: string; value: string; sub?: string; accent?: string; className?: string }) {
   return (
-    <div className="rounded-xl border border-[#E4E2DA] bg-white p-5">
+    <div className={`rounded-xl border border-[#E4E2DA] bg-white p-4 sm:p-5 ${className}`}>
       <div className="text-xs font-medium text-[#5F5E5A]" style={{ fontFamily: "Inter" }}>{label}</div>
-      <div className="mt-2 text-3xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
+      <div className="mt-2 text-2xl sm:text-3xl text-[#2C2C2A] break-words" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
         {value}
       </div>
-      {sub && <div className="mt-1 text-xs" style={{ color: accent }}>{sub}</div>}
+      {sub && <div className="mt-1 text-xs text-[#5F5E5A] line-clamp-2" style={{ color: accent }}>{sub}</div>}
     </div>
   );
 }
@@ -313,7 +313,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
       </div>
 
       {/* Stat cards */}
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="mb-4 sm:mb-6 grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
         <StatCard label="Rides today" value={String(ridesTodayCount)} />
         <StatCard label="Earnings today" value={`€${earningsToday.toFixed(2)}`} accent="#3B6D11" />
         <StatCard
@@ -321,11 +321,12 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
           value={nextUpcoming ? new Date(nextUpcoming.scheduled_time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "—"}
           sub={nextUpcoming ? `${nextUpcoming.passenger_name}, ${nextUpcoming.pickup_address}` : "No upcoming rides"}
           accent="#185FA5"
+          className="col-span-2 md:col-span-1"
         />
       </div>
 
       {/* Charts row */}
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="mb-4 sm:mb-6 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         <div className="md:col-span-2 rounded-xl border border-[#E4E2DA] bg-white p-5">
           <div className="mb-3 text-sm font-medium text-[#2C2C2A]">Earnings, last 7 days</div>
           <div style={{ width: "100%", height: 140 }}>
