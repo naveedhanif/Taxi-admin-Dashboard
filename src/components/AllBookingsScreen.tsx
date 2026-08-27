@@ -107,16 +107,74 @@ function formatDateTime(iso: string) {
   return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
+const VALID_STATUS_FILTERS = ["all", "pending", "confirmed", "en_route", "arrived", "in_progress", "completed", "canceled"];
+
 export default function AllBookingsScreen({ driverId }: { driverId: string | null }) {
   useGoogleFont();
   const [bookingsList, setBookingsList] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  // Persisted per driver, same pattern and same reason as
+  // App.tsx's dashboardScreen fix: iOS reloads a backgrounded PWA's
+  // page from scratch under memory pressure, wiping every in-memory
+  // React state. Restoring WHICH TAB to land on (the earlier fix)
+  // wasn't enough on its own — this component still remounted with
+  // its filter reset to defaults every time. Lazy-initialized from
+  // localStorage so a fresh reload restores the actual filter/search/
+  // sort instead of defaulting back to "all".
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(`taxi_admin_bookings_filter_${driverId}`);
+      return saved && VALID_STATUS_FILTERS.includes(saved) ? saved : "all";
+    } catch {
+      return "all";
+    }
+  });
+  const [searchQuery, setSearchQuery] = useState(() => {
+    try {
+      return localStorage.getItem(`taxi_admin_bookings_search_${driverId}`) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => {
+    try {
+      const saved = localStorage.getItem(`taxi_admin_bookings_sort_${driverId}`);
+      return saved === "desc" ? "desc" : "asc";
+    } catch {
+      return "asc";
+    }
+  });
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  useEffect(() => {
+    if (!driverId) return;
+    try {
+      localStorage.setItem(`taxi_admin_bookings_filter_${driverId}`, filterStatus);
+    } catch {
+      // Ignore — storage unavailable, this just means the next reload
+      // falls back to the default instead of persisting.
+    }
+  }, [filterStatus, driverId]);
+
+  useEffect(() => {
+    if (!driverId) return;
+    try {
+      localStorage.setItem(`taxi_admin_bookings_search_${driverId}`, searchQuery);
+    } catch {
+      // Ignore.
+    }
+  }, [searchQuery, driverId]);
+
+  useEffect(() => {
+    if (!driverId) return;
+    try {
+      localStorage.setItem(`taxi_admin_bookings_sort_${driverId}`, sortOrder);
+    } catch {
+      // Ignore.
+    }
+  }, [sortOrder, driverId]);
 
   useEffect(() => {
     if (!driverId) {
