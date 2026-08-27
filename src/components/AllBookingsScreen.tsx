@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, Wallet, Check, Banknote, CreditCard, MessageCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { formatPhoneForLinks } from "../phoneLinks";
@@ -147,6 +147,28 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
     }
   });
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  // Only auto-reopen the detail modal ONCE, right after the initial
+  // load restores it — not on every later realtime refresh. A ref
+  // (not state) is required here: this flag is read inside a closure
+  // created once per driverId effect run, so a useState value would
+  // stay stale at its original "false" for every later realtime-
+  // triggered call within that same effect run, incorrectly reopening
+  // the modal every time even right after manually closing it.
+  const hasRestoredSelectionRef = useRef(false);
+
+  useEffect(() => {
+    if (!driverId) return;
+    try {
+      if (selectedBooking) {
+        localStorage.setItem(`taxi_admin_selected_booking_${driverId}`, selectedBooking.id);
+      } else {
+        localStorage.removeItem(`taxi_admin_selected_booking_${driverId}`);
+      }
+    } catch {
+      // Ignore — storage unavailable, this just means a reload won't
+      // reopen whichever booking detail was open.
+    }
+  }, [selectedBooking, driverId]);
 
   useEffect(() => {
     if (!driverId) return;
@@ -204,7 +226,21 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
       if (error) {
         setErrorMessage(error.message);
       } else {
-        setBookingsList((data ?? []) as Booking[]);
+        const list = (data ?? []) as Booking[];
+        setBookingsList(list);
+
+        if (!hasRestoredSelectionRef.current) {
+          hasRestoredSelectionRef.current = true;
+          try {
+            const savedId = localStorage.getItem(`taxi_admin_selected_booking_${driverId}`);
+            if (savedId) {
+              const match = list.find((b) => b.id === savedId);
+              if (match) setSelectedBooking(match);
+            }
+          } catch {
+            // Ignore.
+          }
+        }
       }
       setLoading(false);
     }

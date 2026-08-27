@@ -37,35 +37,56 @@ function screenFromPath(pathname: string): "overview" | "bookings" | "settings" 
   return "overview";
 }
 
+function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" {
+  const pathScreen = screenFromPath(window.location.pathname);
+  // Landing exactly on "/" is ambiguous: it's either a real, deliberate
+  // navigation to Dashboard, OR — critically — it's iOS relaunching an
+  // INSTALLED home-screen PWA after it was fully closed (not just
+  // backgrounded). Installed PWAs always reopen at manifest.json's
+  // start_url ("/") in that case, no matter which URL was showing when
+  // the driver left, which completely bypasses pure URL-based
+  // restoration. localStorage is the fallback for exactly that case —
+  // it's checked ONLY when landing on "/" specifically, so a genuine
+  // deliberate navigation to Dashboard is never overridden by it.
+  if (window.location.pathname === "/") {
+    try {
+      const saved = localStorage.getItem("taxi_admin_dashboard_screen");
+      if (saved === "bookings" || saved === "settings") return saved;
+    } catch {
+      // Ignore — storage unavailable, just use the path-derived default.
+    }
+  }
+  return pathScreen;
+}
+
 export default function App() {
   const [viewMode, setViewMode] = useState<"onboarding" | "dashboard">("onboarding");
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
-  // The URL is now the actual source of truth for which screen is
-  // showing — not just in-memory state, and not just localStorage
-  // either. Both of those were tried already (this file's own git
-  // history) and neither survived every real-world case of the driver
-  // switching away and back on iOS. A URL survives ANY kind of reload
-  // or relaunch, because the browser/OS itself is what's responsible
-  // for remembering and re-requesting it — there's no app-level state
-  // to lose in the first place. "login" is intentionally not part of
-  // the URL scheme below (see screenFromPath) — it's a transient state
-  // reached via the header button, not a real destination.
+  // Two layers working together, not one or the other — see
+  // initialDashboardScreen()'s comment for why URL alone wasn't enough.
   const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings">(
-    () => screenFromPath(window.location.pathname)
+    initialDashboardScreen
   );
   // Mobile: drawer is closed by default, opened via hamburger.
   // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Keep the URL in sync whenever the screen changes via in-app
-  // navigation (sidebar clicks, "View all bookings" links, etc.) — a
-  // real navigation via pushState, not a page reload, so the app stays
-  // mounted and nothing else resets.
+  // Keep both the URL AND localStorage in sync whenever the screen
+  // changes via in-app navigation (sidebar clicks, "View all bookings"
+  // links, etc.) — a real navigation via pushState, not a page reload,
+  // so the app stays mounted and nothing else resets.
   useEffect(() => {
     const targetPath = SCREEN_PATHS[dashboardScreen];
     if (targetPath && window.location.pathname !== targetPath) {
       window.history.pushState(null, "", targetPath);
+    }
+    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings") {
+      try {
+        localStorage.setItem("taxi_admin_dashboard_screen", dashboardScreen);
+      } catch {
+        // Ignore.
+      }
     }
   }, [dashboardScreen]);
 
@@ -152,6 +173,11 @@ export default function App() {
     setDriverId(null);
     setDashboardScreen("login");
     window.history.pushState(null, "", "/");
+    try {
+      localStorage.removeItem("taxi_admin_dashboard_screen");
+    } catch {
+      // Ignore.
+    }
   }
 
   const navigationItems = [
