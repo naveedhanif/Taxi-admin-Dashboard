@@ -30,38 +30,55 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 
+const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings" };
+function screenFromPath(pathname: string): "overview" | "bookings" | "settings" {
+  if (pathname.startsWith("/bookings")) return "bookings";
+  if (pathname.startsWith("/settings")) return "settings";
+  return "overview";
+}
+
 export default function App() {
   const [viewMode, setViewMode] = useState<"onboarding" | "dashboard">("onboarding");
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
-  // iOS commonly reloads a backgrounded PWA's page from scratch when the
-  // OS reclaims memory (not just suspends it) — every in-memory React
-  // state, including which screen the driver was on, was lost, so it
-  // always came back to the app on "overview" no matter where the
-  // driver actually left off. Persisting to localStorage and reading it
-  // back on mount means the freshly-reloaded page restores the real
-  // last screen instead of the default.
-  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings">(() => {
-    try {
-      const saved = localStorage.getItem("taxi_admin_dashboard_screen");
-      if (saved === "overview" || saved === "bookings" || saved === "settings") return saved;
-    } catch {
-      // Ignore — storage unavailable, just use the default.
-    }
-    return "overview";
-  });
+  // The URL is now the actual source of truth for which screen is
+  // showing — not just in-memory state, and not just localStorage
+  // either. Both of those were tried already (this file's own git
+  // history) and neither survived every real-world case of the driver
+  // switching away and back on iOS. A URL survives ANY kind of reload
+  // or relaunch, because the browser/OS itself is what's responsible
+  // for remembering and re-requesting it — there's no app-level state
+  // to lose in the first place. "login" is intentionally not part of
+  // the URL scheme below (see screenFromPath) — it's a transient state
+  // reached via the header button, not a real destination.
+  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings">(
+    () => screenFromPath(window.location.pathname)
+  );
   // Mobile: drawer is closed by default, opened via hamburger.
   // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Keep the URL in sync whenever the screen changes via in-app
+  // navigation (sidebar clicks, "View all bookings" links, etc.) — a
+  // real navigation via pushState, not a page reload, so the app stays
+  // mounted and nothing else resets.
   useEffect(() => {
-    try {
-      localStorage.setItem("taxi_admin_dashboard_screen", dashboardScreen);
-    } catch {
-      // Ignore — storage unavailable, this just means the next reload
-      // falls back to the default instead of persisting.
+    const targetPath = SCREEN_PATHS[dashboardScreen];
+    if (targetPath && window.location.pathname !== targetPath) {
+      window.history.pushState(null, "", targetPath);
     }
   }, [dashboardScreen]);
+
+  // Also respond to the browser's own back/forward buttons, for
+  // completeness — not the main point of this fix, but free once the
+  // URL is the source of truth anyway.
+  useEffect(() => {
+    function handlePopState() {
+      setDashboardScreen(screenFromPath(window.location.pathname));
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Real session tracking. onAuthStateChange fires immediately with the
   // current session on load, then again on every sign-in/sign-out — this
@@ -134,11 +151,7 @@ export default function App() {
     await supabase.auth.signOut();
     setDriverId(null);
     setDashboardScreen("login");
-    try {
-      localStorage.removeItem("taxi_admin_dashboard_screen");
-    } catch {
-      // Ignore.
-    }
+    window.history.pushState(null, "", "/");
   }
 
   const navigationItems = [
