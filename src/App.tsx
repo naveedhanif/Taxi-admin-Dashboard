@@ -71,6 +71,15 @@ export default function App() {
   // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Purely for the debug badge below to display an honest, in-sync
+  // value — pushState() doesn't itself trigger a React re-render, so
+  // the debug badge reading window.location.pathname directly at
+  // arbitrary render times could show a STALE path that lagged one
+  // step behind the real one. That lag is almost certainly what the
+  // last two screenshots were actually showing, not a real navigation
+  // bug. This state is updated in the same effect that calls
+  // pushState, so it's always accurate.
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
   // Keep both the URL AND localStorage in sync whenever the screen
   // changes via in-app navigation (sidebar clicks, "View all bookings"
@@ -80,6 +89,7 @@ export default function App() {
     const targetPath = SCREEN_PATHS[dashboardScreen];
     if (targetPath && window.location.pathname !== targetPath) {
       window.history.pushState(null, "", targetPath);
+      setCurrentPath(targetPath);
     }
     if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings") {
       try {
@@ -95,6 +105,7 @@ export default function App() {
   // URL is the source of truth anyway.
   useEffect(() => {
     function handlePopState() {
+      setCurrentPath(window.location.pathname);
       setDashboardScreen(screenFromPath(window.location.pathname));
     }
     window.addEventListener("popstate", handlePopState);
@@ -414,7 +425,7 @@ export default function App() {
           bug is confirmed fixed. Shows the raw path/state/localStorage
           values so we can see exactly what's happening on a real device
           instead of guessing from a screenshot after the fact. */}
-      <DebugBadge dashboardScreen={dashboardScreen} />
+      <DebugBadge dashboardScreen={dashboardScreen} currentPath={currentPath} />
 
       {/* Version badge — small, fixed, out of the way. Exists purely so
           you can glance at the app and confirm which deployed commit
@@ -426,7 +437,7 @@ export default function App() {
   );
 }
 
-function DebugBadge({ dashboardScreen }: { dashboardScreen: string }) {
+function DebugBadge({ dashboardScreen, currentPath }: { dashboardScreen: string; currentPath: string }) {
   let stored = "?";
   try {
     stored = localStorage.getItem("taxi_admin_dashboard_screen") ?? "(empty)";
@@ -438,7 +449,7 @@ function DebugBadge({ dashboardScreen }: { dashboardScreen: string }) {
       className="fixed bottom-2 left-2 z-50 rounded-lg px-2 py-1 text-[10px] font-mono"
       style={{ background: "#2C2C2A", color: "#F0EEE7" }}
     >
-      path:{window.location.pathname} state:{dashboardScreen} saved:{stored}
+      path:{currentPath} state:{dashboardScreen} saved:{stored}
     </div>
   );
 }
