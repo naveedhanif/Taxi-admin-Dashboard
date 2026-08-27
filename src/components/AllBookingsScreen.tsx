@@ -230,6 +230,61 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
     }
   };
 
+  // Cancelling used to go through updateBookingStatus above — a plain
+  // `status = "canceled"` update with NO refund at all. This platform
+  // charges passengers via Stripe Connect destination charges
+  // (create-booking), so cancelling without refunding just leaves their
+  // money captured with nothing paying it back. This calls the shared
+  // cancel-booking Edge Function instead, which actually issues a
+  // Stripe refund (reversing the Connect transfer + platform fee) for
+  // whatever was charged, then updates the booking's status. Used by
+  // both this dashboard and the passenger app's own self-cancel, so
+  // refund behavior can't drift between the two.
+  const cancelBookingWithRefund = async (id: string) => {
+    setUpdatingId(id);
+    setErrorMessage("");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      setUpdatingId(null);
+      setErrorMessage("Your session expired — please refresh and sign in again before cancelling.");
+      return;
+    }
+
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-booking`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ booking_id: id }),
+      }
+    ).then((r) => r.json());
+
+    setUpdatingId(null);
+
+    if (response.error) {
+      setErrorMessage(response.error);
+      return;
+    }
+    if (response.refundError) {
+      setErrorMessage(
+        `Booking cancelled, but the automatic refund failed: ${response.refundError}. You may need to refund the passenger manually from your Stripe dashboard.`
+      );
+    }
+
+    setBookingsList((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, status: "canceled" } : b))
+    );
+    if (selectedBooking && selectedBooking.id === id) {
+      setSelectedBooking((prev) => (prev ? { ...prev, status: "canceled" } : null));
+    }
+  };
+
   // For pay-later bookings: the driver collects the remaining balance
   // directly (cash or card reader) after the ride, outside Stripe — this
   // just records how it was paid, it doesn't move any money itself.
@@ -543,7 +598,11 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
                 </button>
                 <button
                   disabled={updatingId === selectedBooking.id}
-                  onClick={() => updateBookingStatus(selectedBooking.id, "canceled")}
+                  onClick={() => {
+                    if (window.confirm("Cancel this booking and refund the passenger?")) {
+                      cancelBookingWithRefund(selectedBooking.id);
+                    }
+                  }}
                   className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#991B1B] cursor-pointer disabled:opacity-60"
                 >
                   Cancel
