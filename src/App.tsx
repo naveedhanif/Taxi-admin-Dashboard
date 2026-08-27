@@ -410,12 +410,35 @@ export default function App() {
         </div>
       )}
 
+      {/* TEMPORARY diagnostic badge — remove once the screen-persistence
+          bug is confirmed fixed. Shows the raw path/state/localStorage
+          values so we can see exactly what's happening on a real device
+          instead of guessing from a screenshot after the fact. */}
+      <DebugBadge dashboardScreen={dashboardScreen} />
+
       {/* Version badge — small, fixed, out of the way. Exists purely so
           you can glance at the app and confirm which deployed commit
           you're actually testing. Tap it to copy the full commit SHA
           for bug reports tied to an exact build. See vite.config.ts for
           how these values are injected. */}
       <VersionBadge />
+    </div>
+  );
+}
+
+function DebugBadge({ dashboardScreen }: { dashboardScreen: string }) {
+  let stored = "?";
+  try {
+    stored = localStorage.getItem("taxi_admin_dashboard_screen") ?? "(empty)";
+  } catch {
+    stored = "(unavailable)";
+  }
+  return (
+    <div
+      className="fixed bottom-2 left-2 z-50 rounded-lg px-2 py-1 text-[10px] font-mono"
+      style={{ background: "#2C2C2A", color: "#F0EEE7" }}
+    >
+      path:{window.location.pathname} state:{dashboardScreen} saved:{stored}
     </div>
   );
 }
