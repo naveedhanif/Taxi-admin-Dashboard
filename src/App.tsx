@@ -118,24 +118,35 @@ export default function App() {
   const [driverId, setDriverId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
+  // A ref, not state — needs to be read synchronously within the same
+  // onAuthStateChange callback invocation to detect a genuine sign-in
+  // (see below), which a state value can't reliably do since state
+  // updates aren't visible until the next render.
+  const driverIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const result = await getDriverForUser(session.user.id);
+        // Trusting Supabase's event string (e.g. checking for
+        // "SIGNED_IN") turned out NOT to be reliable — Supabase
+        // automatically tries to refresh the session whenever a
+        // background tab regains focus, and that refresh can itself
+        // fire as "SIGNED_IN" rather than "TOKEN_REFRESHED" depending
+        // on SDK version/internals. That's what kept resetting the
+        // screen to Dashboard just from switching browser tabs, with
+        // no reload involved at all. Detecting the actual state
+        // transition instead — genuinely going from "no driver known"
+        // to "a driver is known" — is reliable regardless of which
+        // event string Supabase happens to report.
+        const isGenuineSignIn = driverIdRef.current === null && result.driverId !== null;
+        driverIdRef.current = result.driverId;
         setDriverId(result.driverId);
         // Driver already has an account — go straight to dashboard,
         // skip onboarding entirely.
         if (result.driverId) {
           setViewMode("dashboard");
-          // Only force back to Overview on a REAL new sign-in — not on
-          // "INITIAL_SESSION" (fires on every page load/reload, including
-          // whenever iOS reloads a backgrounded PWA's page) or
-          // "TOKEN_REFRESHED" (fires periodically in the background).
-          // Treating every one of those as if it were a fresh sign-in is
-          // exactly what kept resetting the driver back to Dashboard no
-          // matter which screen they'd actually been on.
-          if (event === "SIGNED_IN") {
+          if (isGenuineSignIn) {
             setDashboardScreen("overview");
           }
 
@@ -147,6 +158,7 @@ export default function App() {
           setBusinessName(data?.business_name ?? null);
         }
       } else {
+        driverIdRef.current = null;
         setDriverId(null);
         setBusinessName(null);
       }
@@ -181,6 +193,7 @@ export default function App() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    driverIdRef.current = null;
     setDriverId(null);
     setDashboardScreen("login");
     window.history.pushState(null, "", "/");
