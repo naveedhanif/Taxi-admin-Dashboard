@@ -112,6 +112,39 @@ function formatDateTime(iso: string) {
 }
 
 const VALID_STATUS_FILTERS = ["all", "pending", "confirmed", "en_route", "arrived", "in_progress", "completed", "canceled"];
+const VALID_DATE_FILTERS = ["all", "today", "tomorrow", "this_week", "upcoming", "past"];
+
+// Boundaries computed fresh each call from the driver's own device clock
+// — matches how the rest of this file already treats "now" (formatTime,
+// the sort comparator), so a date filter and the sort order never
+// disagree about what "today" means.
+function matchesDateFilter(scheduledTime: string, filter: string): boolean {
+  if (filter === "all") return true;
+  const d = new Date(scheduledTime);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const startOfDayAfterTomorrow = new Date(startOfTomorrow);
+  startOfDayAfterTomorrow.setDate(startOfDayAfterTomorrow.getDate() + 1);
+  const endOfWeek = new Date(startOfToday);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+  switch (filter) {
+    case "today":
+      return d >= startOfToday && d < startOfTomorrow;
+    case "tomorrow":
+      return d >= startOfTomorrow && d < startOfDayAfterTomorrow;
+    case "this_week":
+      return d >= startOfToday && d < endOfWeek;
+    case "upcoming":
+      return d >= now;
+    case "past":
+      return d < now;
+    default:
+      return true;
+  }
+}
 
 export default function AllBookingsScreen({
   driverId,
@@ -156,6 +189,14 @@ export default function AllBookingsScreen({
       return saved === "desc" ? "desc" : "asc";
     } catch {
       return "asc";
+    }
+  });
+  const [dateFilter, setDateFilter] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(`taxi_admin_bookings_datefilter_${driverId}`);
+      return saved && VALID_DATE_FILTERS.includes(saved) ? saved : "all";
+    } catch {
+      return "all";
     }
   });
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -215,6 +256,15 @@ export default function AllBookingsScreen({
       // Ignore.
     }
   }, [sortOrder, driverId]);
+
+  useEffect(() => {
+    if (!driverId) return;
+    try {
+      localStorage.setItem(`taxi_admin_bookings_datefilter_${driverId}`, dateFilter);
+    } catch {
+      // Ignore.
+    }
+  }, [dateFilter, driverId]);
 
   useEffect(() => {
     if (!driverId) {
@@ -293,14 +343,24 @@ export default function AllBookingsScreen({
     { value: "canceled", label: "Canceled" },
   ];
 
+  const DATE_FILTER_OPTIONS = [
+    { value: "all", label: "All dates" },
+    { value: "today", label: "Today" },
+    { value: "tomorrow", label: "Tomorrow" },
+    { value: "this_week", label: "This week" },
+    { value: "upcoming", label: "Upcoming" },
+    { value: "past", label: "Past" },
+  ];
+
   const filteredBookings = bookingsList
     .filter((b) => {
       const matchesStatus = filterStatus === "all" || b.status === filterStatus;
+      const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter);
       const matchesSearch =
         b.passenger_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.pickup_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.dropoff_address.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesDate && matchesSearch;
     })
     .sort((a, b) => {
       const timeA = new Date(a.scheduled_time).getTime();
@@ -460,6 +520,29 @@ export default function AllBookingsScreen({
         </div>
       </div>
 
+      {/* Quick date filter — a scrollable row of chips rather than a
+          dropdown, since this is the filter drivers reach for most
+          often ("what's on today") and chips make the current choice
+          visible at a glance without opening anything. */}
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
+        {DATE_FILTER_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setDateFilter(opt.value)}
+            className={`emboss-btn shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold cursor-pointer ${
+              dateFilter === opt.value ? "emboss-selected text-white" : "text-[#5F5E5A]"
+            }`}
+            style={
+              dateFilter === opt.value
+                ? { background: "linear-gradient(135deg, #378ADD, #0C447C)", boxShadow: "inset 2px 2px 5px rgba(4,44,83,0.5), inset -1px -1px 3px rgba(133,183,235,0.3)" }
+                : undefined
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filter and Search Bar */}
       <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="relative md:col-span-2">
@@ -493,7 +576,14 @@ export default function AllBookingsScreen({
       <div className="rounded-xl border border-[#E4E2DA] bg-white p-5">
         <div className="mb-4 flex items-center justify-between text-xs text-[#5F5E5A]">
           <span>Showing {filteredBookings.length} bookings</span>
-          <span>Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong></span>
+          <span>
+            Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong>
+            {dateFilter !== "all" && (
+              <>
+                {" "}· <strong className="text-[#2C2C2A]">{DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}</strong>
+              </>
+            )}
+          </span>
         </div>
 
         {errorMessage && (

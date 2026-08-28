@@ -29,10 +29,12 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
       </div>
 
       {/* Sub-tabs — a second-level nav within Settings, distinct from the
-          main sidebar. A responsive grid of embossed 3D cards rather
-          than variable-width pills, which wrapped awkwardly on mobile
-          (different label lengths meant a ragged, cramped layout). */}
-      <div className="mb-6 grid grid-cols-2 gap-3 px-1 pb-2 sm:grid-cols-3 lg:grid-cols-5">
+          main sidebar. A single scrollable row of tabs rather than a
+          multi-row button grid — more compact (one row regardless of
+          screen width) and reads as connected tabs rather than a set
+          of disconnected buttons, matching the same chip style used
+          for the booking date filter for a consistent feel. */}
+      <div className="mb-6 flex gap-2 overflow-x-auto px-1 pb-2" style={{ scrollbarWidth: "thin" }}>
         {TABS.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.id;
@@ -40,7 +42,7 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-center text-xs font-semibold cursor-pointer ${
+              className={`emboss-btn flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-semibold cursor-pointer ${
                 isActive ? "emboss-selected text-white" : "text-[#5F5E5A]"
               }`}
               style={
@@ -49,8 +51,8 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
                   : undefined
               }
             >
-              <Icon size={20} />
-              <span className="leading-tight">{t.label}</span>
+              <Icon size={16} />
+              {t.label}
             </button>
           );
         })}
