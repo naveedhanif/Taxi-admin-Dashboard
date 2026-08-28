@@ -293,7 +293,7 @@ export default function App() {
             {driverId && (
               <button
                 onClick={handleLogout}
-                className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-[#991B1B] cursor-pointer transition-all"
+                className="emboss-btn flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-[#991B1B] cursor-pointer transition-all"
               >
                 <LogOut size={13} />
                 <span>Log out</span>

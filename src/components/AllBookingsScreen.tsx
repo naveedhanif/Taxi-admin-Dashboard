@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, Wallet, Check, Banknote, CreditCard, MessageCircle } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { formatPhoneForLinks } from "../phoneLinks";
 
@@ -58,6 +58,10 @@ function EmbossStyles() {
       .emboss-btn-primary:active {
         box-shadow: inset 2px 2px 5px rgba(4,44,83,0.5), inset -2px -2px 4px rgba(133,183,235,0.35);
         transform: translateY(1px);
+      }
+      .emboss-selected {
+        box-shadow: inset 2.5px 2.5px 6px rgba(44,44,42,0.20), inset -2px -2px 5px rgba(255,255,255,0.6) !important;
+        cursor: default !important;
       }
       .emboss-input {
         background: #FFFFFF;
@@ -481,7 +485,7 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
               <div
                 key={b.id}
                 onClick={() => handleSelectBooking(b)}
-                className="flex flex-col justify-between rounded-lg border border-[#E4E2DA] p-4 transition-all hover:border-[#185FA5]/40 md:flex-row md:items-center gap-3 cursor-pointer"
+                className="emboss-btn flex cursor-pointer flex-col justify-between gap-3 rounded-xl p-4 transition-all md:flex-row md:items-center"
               >
                 <div className="flex items-start gap-3">
                   <div className="rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
@@ -535,8 +539,8 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
 
       {/* Selected Booking Detail Modal */}
       {selectedBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-[#E4E2DA] bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-[#E4E2DA] bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between border-b border-[#E4E2DA] pb-3">
               <div>
                 <div className="text-xs font-mono text-[#5F5E5A]">{selectedBooking.id.slice(0, 8)}</div>
@@ -548,30 +552,30 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
             </div>
 
             <div className="space-y-3.5 text-xs">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-2 text-[#5F5E5A]">
                   <Phone size={14} className="text-[#185FA5]" />
-                  <span className="font-medium text-[#2C2C2A]">{selectedBooking.passenger_phone}</span>
+                  <span className="text-sm font-medium text-[#2C2C2A]">{selectedBooking.passenger_phone}</span>
                 </div>
                 {(() => {
                   const links = formatPhoneForLinks(selectedBooking.passenger_phone);
                   if (!links) return null;
                   return (
-                    <div className="flex items-center gap-1.5">
+                    <div className="grid grid-cols-2 gap-2.5">
                       <a
                         href={`tel:${links.tel}`}
-                        className="emboss-btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-[#2C2C2A]"
+                        className="emboss-btn flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-semibold text-[#2C2C2A]"
                       >
-                        <Phone size={11} /> Call
+                        <Phone size={16} /> Call
                       </a>
                       <a
                         href={`https://wa.me/${links.whatsapp}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white"
-                        style={{ background: "#25D366" }}
+                        className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-semibold text-white"
+                        style={{ background: "#25D366", boxShadow: "3px 3px 7px rgba(37,211,102,0.35), -2px -2px 5px rgba(255,255,255,0.5)" }}
                       >
-                        <MessageCircle size={11} /> WhatsApp
+                        <MessageCircle size={16} /> WhatsApp
                       </a>
                     </div>
                   );
@@ -639,75 +643,104 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
 
             {selectedBooking.payment_timing === "later" && !selectedBooking.balance_collected && (
               <div className="mt-5 border-t border-[#E4E2DA] pt-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
+                <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
                   Mark balance as collected:
                   {updatingId === selectedBooking.id && <Loader2 size={12} className="animate-spin" />}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     disabled={updatingId === selectedBooking.id}
                     onClick={() => markBalanceCollected(selectedBooking.id, "cash")}
-                    className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer disabled:opacity-60"
+                    className="emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:opacity-60"
                   >
-                    <Banknote size={13} /> Paid cash
+                    <Banknote size={20} /> Paid cash
                   </button>
                   <button
                     disabled={updatingId === selectedBooking.id}
                     onClick={() => markBalanceCollected(selectedBooking.id, "card")}
-                    className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer disabled:opacity-60"
+                    className="emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:opacity-60"
                   >
-                    <CreditCard size={13} /> Paid by card
+                    <CreditCard size={20} /> Paid by card
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Status Action Buttons */}
+            {/* Status Action Buttons — each one now reflects the booking's
+                ACTUAL current status (previously "Confirm" always looked
+                selected/blue no matter what the real status was, which is
+                exactly the mismatch visible when a booking was already
+                En Route). The button matching the current status locks
+                into a pressed-in "selected" look and disables — every
+                other transition stays exactly as clickable as before, so
+                nothing about which actions are possible has changed. */}
             <div className="mt-5 border-t border-[#E4E2DA] pt-4">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
+              <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
                 Update Booking Status:
                 {updatingId === selectedBooking.id && <Loader2 size={12} className="animate-spin" />}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  disabled={updatingId === selectedBooking.id}
-                  onClick={() => updateBookingStatus(selectedBooking.id, "confirmed")}
-                  className="emboss-btn-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white cursor-pointer disabled:opacity-60"
-                >
-                  Confirm
-                </button>
-                <button
-                  disabled={updatingId === selectedBooking.id}
-                  onClick={() => updateBookingStatus(selectedBooking.id, "en_route")}
-                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#2C2C2A] cursor-pointer disabled:opacity-60"
-                >
-                  Mark En Route
-                </button>
-                <button
-                  disabled={updatingId === selectedBooking.id}
-                  onClick={() => updateBookingStatus(selectedBooking.id, "completed")}
-                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#27500A] bg-[#EAF3DE] cursor-pointer disabled:opacity-60"
-                >
-                  Complete
-                </button>
-                <button
-                  disabled={updatingId === selectedBooking.id}
-                  onClick={() => {
-                    if (window.confirm("Cancel this booking and refund the passenger?")) {
-                      cancelBookingWithRefund(selectedBooking.id);
-                    }
-                  }}
-                  className="emboss-btn rounded-lg px-3 py-1.5 text-xs font-medium text-[#991B1B] cursor-pointer disabled:opacity-60"
-                >
-                  Cancel
-                </button>
+              <div className="grid grid-cols-2 gap-3">
+                {(() => {
+                  const isBusy = updatingId === selectedBooking.id;
+                  const isCurrent = (s: Booking["status"]) => selectedBooking.status === s;
+                  return (
+                    <>
+                      <button
+                        disabled={isBusy || isCurrent("confirmed")}
+                        onClick={() => updateBookingStatus(selectedBooking.id, "confirmed")}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:opacity-90 ${
+                          isCurrent("confirmed")
+                            ? "emboss-btn emboss-selected text-[#185FA5] bg-[#E1F0FF]"
+                            : "emboss-btn-primary text-white"
+                        }`}
+                      >
+                        {isCurrent("confirmed") ? <CheckCircle2 size={20} /> : <CheckCircle2 size={20} />}
+                        {isCurrent("confirmed") ? "Confirmed" : "Confirm"}
+                      </button>
+                      <button
+                        disabled={isBusy || isCurrent("en_route")}
+                        onClick={() => updateBookingStatus(selectedBooking.id, "en_route")}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:opacity-90 emboss-btn ${
+                          isCurrent("en_route") ? "emboss-selected bg-[#E1F0FF] text-[#0C4A6E]" : ""
+                        }`}
+                      >
+                        <Navigation size={20} />
+                        {isCurrent("en_route") ? "En Route" : "Mark En Route"}
+                      </button>
+                      <button
+                        disabled={isBusy || isCurrent("completed")}
+                        onClick={() => updateBookingStatus(selectedBooking.id, "completed")}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#27500A] bg-[#EAF3DE] cursor-pointer disabled:opacity-90 emboss-btn ${
+                          isCurrent("completed") ? "emboss-selected" : ""
+                        }`}
+                      >
+                        <FlagTriangleRight size={20} />
+                        {isCurrent("completed") ? "Completed" : "Complete"}
+                      </button>
+                      <button
+                        disabled={isBusy || isCurrent("canceled")}
+                        onClick={() => {
+                          if (window.confirm("Cancel this booking and refund the passenger?")) {
+                            cancelBookingWithRefund(selectedBooking.id);
+                          }
+                        }}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#991B1B] cursor-pointer disabled:opacity-90 emboss-btn ${
+                          isCurrent("canceled") ? "emboss-selected bg-[#FEE2E2]" : ""
+                        }`}
+                      >
+                        <XCircle size={20} />
+                        {isCurrent("canceled") ? "Cancelled" : "Cancel"}
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setSelectedBooking(null)}
-                className="emboss-btn rounded-lg px-4 py-2 text-xs font-medium text-[#2C2C2A] cursor-pointer"
+                className="emboss-btn rounded-xl px-6 py-3 text-sm font-semibold text-[#2C2C2A] cursor-pointer"
               >
                 Close
               </button>
