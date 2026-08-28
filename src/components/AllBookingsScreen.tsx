@@ -676,10 +676,12 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
                 ACTUAL current status (previously "Confirm" always looked
                 selected/blue no matter what the real status was, which is
                 exactly the mismatch visible when a booking was already
-                En Route). The button matching the current status locks
-                into a pressed-in "selected" look and disables — every
-                other transition stays exactly as clickable as before, so
-                nothing about which actions are possible has changed. */}
+                En Route). Buttons now disable based on where the
+                booking's status sits in the natural progression
+                (pending → confirmed → en_route → arrived → in_progress
+                → completed), not just an exact match — a booking that's
+                already En Route keeps "Confirm" locked too, instead of
+                it re-enabling the moment the status moves past it. */}
             <div className="mt-5 border-t border-[#E4E2DA] pt-4">
               <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
                 Update Booking Status:
@@ -689,53 +691,81 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
                 {(() => {
                   const isBusy = updatingId === selectedBooking.id;
                   const isCurrent = (s: Booking["status"]) => selectedBooking.status === s;
+                  // Natural forward progression. "canceled" is handled
+                  // separately below since it isn't part of this
+                  // sequence — a booking can be cancelled from almost
+                  // any point, not just reached in order.
+                  const STATUS_ORDER: Record<string, number> = {
+                    pending: 0,
+                    confirmed: 1,
+                    en_route: 2,
+                    arrived: 3,
+                    in_progress: 4,
+                    completed: 5,
+                  };
+                  const currentRank = STATUS_ORDER[selectedBooking.status] ?? -1;
+                  const isCanceled = selectedBooking.status === "canceled";
+                  // Reached or passed this stage already — including
+                  // being cancelled, since none of these forward
+                  // actions make sense on a cancelled booking either.
+                  const isLocked = (s: keyof typeof STATUS_ORDER) => isCanceled || currentRank >= STATUS_ORDER[s];
                   return (
                     <>
                       <button
-                        disabled={isBusy || isCurrent("confirmed")}
+                        disabled={isBusy || isLocked("confirmed")}
                         onClick={() => updateBookingStatus(selectedBooking.id, "confirmed")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:opacity-90 ${
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 ${
                           isCurrent("confirmed")
                             ? "emboss-btn emboss-selected text-[#185FA5] bg-[#E1F0FF]"
+                            : isLocked("confirmed")
+                            ? "emboss-btn text-[#8C8977]"
                             : "emboss-btn-primary text-white"
                         }`}
                       >
-                        {isCurrent("confirmed") ? <CheckCircle2 size={20} /> : <CheckCircle2 size={20} />}
+                        <CheckCircle2 size={20} />
                         {isCurrent("confirmed") ? "Confirmed" : "Confirm"}
                       </button>
                       <button
-                        disabled={isBusy || isCurrent("en_route")}
+                        disabled={isBusy || isLocked("en_route")}
                         onClick={() => updateBookingStatus(selectedBooking.id, "en_route")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:opacity-90 emboss-btn ${
-                          isCurrent("en_route") ? "emboss-selected bg-[#E1F0FF] text-[#0C4A6E]" : ""
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 emboss-btn ${
+                          isCurrent("en_route")
+                            ? "emboss-selected bg-[#E1F0FF] text-[#0C4A6E]"
+                            : isLocked("en_route")
+                            ? "text-[#8C8977]"
+                            : "text-[#2C2C2A]"
                         }`}
                       >
                         <Navigation size={20} />
                         {isCurrent("en_route") ? "En Route" : "Mark En Route"}
                       </button>
                       <button
-                        disabled={isBusy || isCurrent("completed")}
+                        disabled={isBusy || isLocked("completed")}
                         onClick={() => updateBookingStatus(selectedBooking.id, "completed")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#27500A] bg-[#EAF3DE] cursor-pointer disabled:opacity-90 emboss-btn ${
-                          isCurrent("completed") ? "emboss-selected" : ""
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 emboss-btn ${
+                          isCurrent("completed")
+                            ? "emboss-selected text-[#27500A] bg-[#EAF3DE]"
+                            : isLocked("completed")
+                            ? "text-[#8C8977]"
+                            : "text-[#27500A] bg-[#EAF3DE]"
                         }`}
                       >
                         <FlagTriangleRight size={20} />
                         {isCurrent("completed") ? "Completed" : "Complete"}
                       </button>
                       <button
-                        disabled={isBusy || isCurrent("canceled")}
+                        disabled={isBusy || isCanceled || selectedBooking.status === "completed"}
                         onClick={() => {
                           if (window.confirm("Cancel this booking and refund the passenger?")) {
                             cancelBookingWithRefund(selectedBooking.id);
                           }
                         }}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#991B1B] cursor-pointer disabled:opacity-90 emboss-btn ${
-                          isCurrent("canceled") ? "emboss-selected bg-[#FEE2E2]" : ""
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 emboss-btn ${
+                          isCanceled ? "emboss-selected bg-[#FEE2E2] text-[#991B1B]" : "text-[#991B1B]"
                         }`}
                       >
                         <XCircle size={20} />
-                        {isCurrent("canceled") ? "Cancelled" : "Cancel"}
+                        {isCanceled ? "Cancelled" : "Cancel"}
                       </button>
                     </>
                   );
