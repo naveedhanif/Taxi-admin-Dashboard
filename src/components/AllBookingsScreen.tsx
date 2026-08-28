@@ -647,18 +647,24 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
                   Mark balance as collected:
                   {updatingId === selectedBooking.id && <Loader2 size={12} className="animate-spin" />}
                 </div>
+                {selectedBooking.status !== "completed" && (
+                  <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-[#8C8977]">
+                    <AlertCircle size={12} /> Available once the trip is marked Complete below — collecting
+                    before the ride happens risks marking it paid too early.
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <button
-                    disabled={updatingId === selectedBooking.id}
+                    disabled={updatingId === selectedBooking.id || selectedBooking.status !== "completed"}
                     onClick={() => markBalanceCollected(selectedBooking.id, "cash")}
-                    className="emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:opacity-60"
+                    className="emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Banknote size={20} /> Paid cash
                   </button>
                   <button
-                    disabled={updatingId === selectedBooking.id}
+                    disabled={updatingId === selectedBooking.id || selectedBooking.status !== "completed"}
                     onClick={() => markBalanceCollected(selectedBooking.id, "card")}
-                    className="emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:opacity-60"
+                    className="emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold text-[#2C2C2A] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <CreditCard size={20} /> Paid by card
                   </button>
