@@ -175,6 +175,17 @@ export default function App() {
 
   const { notifications, dismiss, unviewedCount } = useNewBookingNotifications(driverId);
 
+  // Set when a notification toast is clicked — AllBookingsScreen watches
+  // this and opens the matching booking's detail modal, then clears it
+  // via onOpenBookingHandled below.
+  const [openBookingId, setOpenBookingId] = useState<string | null>(null);
+
+  function handleOpenBookingFromNotification(id: string) {
+    setDashboardScreen("bookings");
+    setOpenBookingId(id);
+    dismiss(id);
+  }
+
   // Keep the header name in sync if the driver edits their business name
   // in Settings — same tab or another device, without needing a refresh.
   useEffect(() => {
@@ -235,7 +246,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] text-[#2C2C2A] font-sans antialiased">
-      <NotificationToast notifications={notifications} onDismiss={dismiss} />
+      <NotificationToast notifications={notifications} onDismiss={dismiss} onOpenBooking={handleOpenBookingFromNotification} />
 
       {/* Top bar — branding + onboarding/dashboard mode toggle only.
           Screen navigation lives in the left sidebar now. */}
@@ -493,7 +504,13 @@ export default function App() {
                   onLoginSuccess={() => setDashboardScreen("overview")}
                 />
               )}
-              {dashboardScreen === "bookings" && <AllBookingsScreen driverId={driverId} />}
+              {dashboardScreen === "bookings" && (
+                <AllBookingsScreen
+                  driverId={driverId}
+                  openBookingId={openBookingId}
+                  onOpenBookingHandled={() => setOpenBookingId(null)}
+                />
+              )}
               {dashboardScreen === "settings" && <SettingsScreen driverId={driverId} />}
             </div>
           </main>

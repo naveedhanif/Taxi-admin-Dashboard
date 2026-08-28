@@ -113,7 +113,15 @@ function formatDateTime(iso: string) {
 
 const VALID_STATUS_FILTERS = ["all", "pending", "confirmed", "en_route", "arrived", "in_progress", "completed", "canceled"];
 
-export default function AllBookingsScreen({ driverId }: { driverId: string | null }) {
+export default function AllBookingsScreen({
+  driverId,
+  openBookingId,
+  onOpenBookingHandled,
+}: {
+  driverId: string | null;
+  openBookingId?: string | null;
+  onOpenBookingHandled?: () => void;
+}) {
   useGoogleFont();
   const [bookingsList, setBookingsList] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -316,6 +324,23 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
       }
     }
   }
+
+  // Opens the specific booking a clicked notification toast referred
+  // to. Depends on bookingsList too, not just openBookingId, so a
+  // notification clicked before the initial fetch finishes still gets
+  // caught once the list actually loads — not just missed silently.
+  // Finds it in the FULL (unfiltered) list regardless of whatever
+  // filter/search/sort is currently active, so a notification for a
+  // booking that's filtered out of view still opens correctly.
+  useEffect(() => {
+    if (!openBookingId) return;
+    const match = bookingsList.find((b) => b.id === openBookingId);
+    if (match) {
+      handleSelectBooking(match);
+      onOpenBookingHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openBookingId, bookingsList]);
 
   const updateBookingStatus = async (id: string, newStatus: Booking["status"]) => {
     setUpdatingId(id);    const { error } = await supabase.from("bookings").update({ status: newStatus }).eq("id", id);

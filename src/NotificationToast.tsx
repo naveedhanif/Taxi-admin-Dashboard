@@ -5,9 +5,10 @@ import type { BookingNotification } from "./useNewBookingNotifications";
 interface Props {
   notifications: BookingNotification[];
   onDismiss: (id: string) => void;
+  onOpenBooking: (id: string) => void;
 }
 
-export default function NotificationToast({ notifications, onDismiss }: Props) {
+export default function NotificationToast({ notifications, onDismiss, onOpenBooking }: Props) {
   if (notifications.length === 0) return null;
 
   return (
@@ -15,7 +16,13 @@ export default function NotificationToast({ notifications, onDismiss }: Props) {
       {notifications.map((n) => (
         <div
           key={n.id}
-          className="w-80 rounded-xl p-4"
+          onClick={() => onOpenBooking(n.id)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") onOpenBooking(n.id);
+          }}
+          className="w-80 cursor-pointer rounded-xl p-4 transition-transform hover:-translate-y-0.5"
           style={{
             background: "#FBFAF6",
             border: "1px solid #ECE9E0",
@@ -34,7 +41,13 @@ export default function NotificationToast({ notifications, onDismiss }: Props) {
                 New booking
               </span>
             </div>
-            <button onClick={() => onDismiss(n.id)}>
+            <button
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onDismiss(n.id);
+              }}
+              aria-label="Dismiss notification"
+            >
               <X size={15} color="#8C8977" />
             </button>
           </div>
