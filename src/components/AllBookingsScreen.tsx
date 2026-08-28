@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { formatPhoneForLinks } from "../phoneLinks";
 
@@ -151,6 +151,12 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
     }
   });
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  // Replaces window.confirm for cancelling — a native browser confirm
+  // dialog is too easy to blow through without reading, especially
+  // risky once a driver is already mid-trip and a passenger is
+  // depending on them. This tracks whether the confirmation is open;
+  // the actual booking being cancelled is still selectedBooking.
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   // Only auto-reopen the detail modal ONCE, right after the initial
   // load restores it — not on every later realtime refresh. A ref
   // (not state) is required here: this flag is read inside a closure
@@ -755,11 +761,7 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
                       </button>
                       <button
                         disabled={isBusy || isCanceled || selectedBooking.status === "completed"}
-                        onClick={() => {
-                          if (window.confirm("Cancel this booking and refund the passenger?")) {
-                            cancelBookingWithRefund(selectedBooking.id);
-                          }
-                        }}
+                        onClick={() => setShowCancelConfirm(true)}
                         className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 emboss-btn ${
                           isCanceled ? "emboss-selected bg-[#FEE2E2] text-[#991B1B]" : "text-[#991B1B]"
                         }`}
@@ -775,7 +777,10 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
 
             <div className="mt-6 flex justify-end">
               <button
-                onClick={() => setSelectedBooking(null)}
+                onClick={() => {
+                  setSelectedBooking(null);
+                  setShowCancelConfirm(false);
+                }}
                 className="emboss-btn rounded-xl px-6 py-3 text-sm font-semibold text-[#2C2C2A] cursor-pointer"
               >
                 Close
@@ -784,6 +789,68 @@ export default function AllBookingsScreen({ driverId }: { driverId: string | nul
           </div>
         </div>
       )}
+
+      {/* Cancel confirmation — replaces window.confirm. A native browser
+          confirm dialog is too easy to click through without reading,
+          which matters a lot more once a trip is already committed
+          (en route or further) than while it's still just pending. The
+          wording and visual weight below escalate specifically for
+          that case. */}
+      {showCancelConfirm && selectedBooking && (() => {
+        const isCommitted = ["en_route", "arrived", "in_progress"].includes(selectedBooking.status);
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+              <div
+                className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full"
+                style={{ background: isCommitted ? "#FEE2E2" : "#F1EFE8" }}
+              >
+                {isCommitted ? (
+                  <AlertTriangle size={22} className="text-[#991B1B]" />
+                ) : (
+                  <XCircle size={22} className="text-[#5F5E5A]" />
+                )}
+              </div>
+              <h3 className="text-center text-base font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+                {isCommitted ? "This trip is already underway" : "Cancel this booking?"}
+              </h3>
+              <p className="mt-2 text-center text-sm text-[#5F5E5A]">
+                {isCommitted ? (
+                  <>
+                    <strong className="text-[#991B1B]">{selectedBooking.passenger_name}</strong> is expecting you —
+                    the status is already <strong>{selectedBooking.status.replace("_", " ")}</strong>. Cancelling
+                    now notifies them immediately and refunds their payment. This can't be undone.
+                  </>
+                ) : (
+                  <>
+                    This notifies {selectedBooking.passenger_name} and refunds any payment they've made. This
+                    can't be undone.
+                  </>
+                )}
+              </p>
+
+              <div className="mt-5 flex flex-col gap-2.5">
+                <button
+                  onClick={() => {
+                    setShowCancelConfirm(false);
+                    cancelBookingWithRefund(selectedBooking.id);
+                  }}
+                  className="rounded-xl py-3 text-sm font-semibold text-white cursor-pointer"
+                  style={{ background: "#991B1B", boxShadow: "3px 3px 8px rgba(153,27,27,0.35)" }}
+                >
+                  {isCommitted ? "Yes, cancel this trip anyway" : "Yes, cancel this booking"}
+                </button>
+                <button
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="emboss-btn rounded-xl py-3 text-sm font-semibold text-[#2C2C2A] cursor-pointer"
+                >
+                  {isCommitted ? "Keep the trip going" : "No, keep booking"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
