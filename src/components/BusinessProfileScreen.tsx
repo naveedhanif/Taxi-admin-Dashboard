@@ -137,10 +137,10 @@ export default function BusinessProfileScreen({ driverId }: { driverId: string |
           <Loader2 size={14} className="animate-spin" /> Loading…
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="max-w-md space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="max-w-md space-y-5 text-sm">
           <div>
-            <label className="mb-1 flex items-center gap-1.5 font-medium text-[#2C2C2A]">
-              <Building2 size={12} className="text-[#5F5E5A]" /> Business name
+            <label className="mb-1.5 flex items-center gap-1.5 font-medium text-[#2C2C2A]">
+              <Building2 size={14} className="text-[#5F5E5A]" /> Business name
             </label>
             <input
               type="text"
@@ -148,22 +148,22 @@ export default function BusinessProfileScreen({ driverId }: { driverId: string |
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               placeholder="e.g. John's Taxi"
-              className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+              className="emboss-input w-full rounded-xl px-4 py-3 text-sm text-[#2C2C2A]"
             />
           </div>
 
           <div>
-            <label className="mb-1 flex items-center gap-1.5 font-medium text-[#2C2C2A]">
-              <Phone size={12} className="text-[#5F5E5A]" /> Phone number
+            <label className="mb-1.5 flex items-center gap-1.5 font-medium text-[#2C2C2A]">
+              <Phone size={14} className="text-[#5F5E5A]" /> Phone number
             </label>
             <input
               type="tel"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               placeholder="+353 87 123 4567"
-              className="emboss-input w-full rounded-lg px-3 py-2 text-xs font-mono text-[#2C2C2A]"
+              className="emboss-input w-full rounded-xl px-4 py-3 text-sm font-mono text-[#2C2C2A]"
             />
-            <p className="mt-1.5 text-[10px] text-[#8C8977]">
+            <p className="mt-1.5 text-xs text-[#8C8977]">
               Include the country code (e.g. +353 for Ireland) so both call and WhatsApp links work correctly.
             </p>
           </div>
@@ -177,9 +177,9 @@ export default function BusinessProfileScreen({ driverId }: { driverId: string |
           <button
             type="submit"
             disabled={saving}
-            className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer disabled:opacity-60"
+            className="emboss-btn-primary flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white cursor-pointer disabled:opacity-60"
           >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <Check size={13} /> : <Save size={13} />}
+            {saving ? <Loader2 size={15} className="animate-spin" /> : saved ? <Check size={15} /> : <Save size={15} />}
             {saving ? "Saving…" : saved ? "Saved" : "Save"}
           </button>
         </form>

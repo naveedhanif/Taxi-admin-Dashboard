@@ -29,9 +29,10 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
       </div>
 
       {/* Sub-tabs — a second-level nav within Settings, distinct from the
-          main sidebar. Kept as pill tabs rather than another sidebar so
-          it's visually clear this is a sub-section. */}
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-[#ECE9E0] px-1 pb-4">
+          main sidebar. A responsive grid of embossed 3D cards rather
+          than variable-width pills, which wrapped awkwardly on mobile
+          (different label lengths meant a ragged, cramped layout). */}
+      <div className="mb-6 grid grid-cols-2 gap-3 px-1 pb-2 sm:grid-cols-3 lg:grid-cols-5">
         {TABS.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.id;
@@ -39,19 +40,17 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold cursor-pointer transition-all ${
-                isActive
-                  ? "text-white"
-                  : "bg-[#F0EEE7] text-[#5F5E5A] hover:text-[#2C2C2A]"
+              className={`emboss-btn flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-center text-xs font-semibold cursor-pointer ${
+                isActive ? "emboss-selected text-white" : "text-[#5F5E5A]"
               }`}
               style={
                 isActive
-                  ? { background: "linear-gradient(135deg, #378ADD, #0C447C)", boxShadow: "2px 2px 8px rgba(4,44,83,0.35)" }
+                  ? { background: "linear-gradient(135deg, #378ADD, #0C447C)", boxShadow: "inset 2px 2px 5px rgba(4,44,83,0.5), inset -1px -1px 3px rgba(133,183,235,0.3)" }
                   : undefined
               }
             >
-              <Icon size={14} />
-              <span>{t.label}</span>
+              <Icon size={20} />
+              <span className="leading-tight">{t.label}</span>
             </button>
           );
         })}

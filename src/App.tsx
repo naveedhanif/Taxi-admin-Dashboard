@@ -250,26 +250,26 @@ export default function App() {
                     separate embossed rods, not flat lines. */}
                 <button
                   onClick={() => setSidebarOpen((v) => !v)}
-                  className="emboss-btn relative flex h-9 w-9 items-center justify-center rounded-lg lg:hidden"
+                  className="emboss-btn relative flex h-11 w-11 items-center justify-center rounded-lg lg:hidden"
                   aria-label="Toggle menu"
                 >
                   <span
-                    className="absolute h-[2.5px] w-5 rounded-full bg-[#2C2C2A] transition-transform duration-300"
+                    className="absolute h-[3px] w-6 rounded-full bg-[#2C2C2A] transition-transform duration-300"
                     style={{
-                      top: sidebarOpen ? "50%" : "34%",
+                      top: sidebarOpen ? "50%" : "32%",
                       transform: sidebarOpen ? "translateY(-50%) rotate(45deg)" : "translateY(-50%)",
                       boxShadow: "1px 1px 1px rgba(0,0,0,0.25)",
                       transitionTimingFunction: "cubic-bezier(.68,-0.4,.27,1.4)",
                     }}
                   />
                   <span
-                    className="absolute top-1/2 h-[2.5px] w-5 -translate-y-1/2 rounded-full bg-[#2C2C2A] transition-opacity duration-150"
+                    className="absolute top-1/2 h-[3px] w-6 -translate-y-1/2 rounded-full bg-[#2C2C2A] transition-opacity duration-150"
                     style={{ opacity: sidebarOpen ? 0 : 1, boxShadow: "1px 1px 1px rgba(0,0,0,0.25)" }}
                   />
                   <span
-                    className="absolute h-[2.5px] w-5 rounded-full bg-[#2C2C2A] transition-transform duration-300"
+                    className="absolute h-[3px] w-6 rounded-full bg-[#2C2C2A] transition-transform duration-300"
                     style={{
-                      top: sidebarOpen ? "50%" : "66%",
+                      top: sidebarOpen ? "50%" : "68%",
                       transform: sidebarOpen ? "translateY(-50%) rotate(-45deg)" : "translateY(-50%)",
                       boxShadow: "1px 1px 1px rgba(0,0,0,0.25)",
                       transitionTimingFunction: "cubic-bezier(.68,-0.4,.27,1.4)",
@@ -297,7 +297,8 @@ export default function App() {
             </div>
             <div>
               <div className="text-base font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-                {businessName || "Driver Dashboard"} <span className="text-xs font-normal text-[#5F5E5A]">— Driver SaaS</span>
+                {businessName || "Driver Dashboard"}{" "}
+                <span className="hidden text-xs font-normal text-[#5F5E5A] sm:inline">— Driver SaaS</span>
               </div>
             </div>
             {driverId && (

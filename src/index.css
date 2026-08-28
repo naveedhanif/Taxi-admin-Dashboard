@@ -21,6 +21,10 @@
   box-shadow: inset 2px 2px 5px rgba(4,44,83,0.5), inset -2px -2px 4px rgba(133,183,235,0.35);
   transform: translateY(1px);
 }
+.emboss-selected {
+  box-shadow: inset 2.5px 2.5px 6px rgba(44,44,42,0.20), inset -2px -2px 5px rgba(255,255,255,0.6) !important;
+  cursor: default !important;
+}
 .emboss-toggle-on {
   background: #EAF3DE;
   border: none;
