@@ -24,8 +24,6 @@ import {
   Calendar,
   Settings as SettingsIcon,
   Car,
-  Menu,
-  X,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -246,13 +244,37 @@ export default function App() {
           <div className="flex items-center gap-3">
             {viewMode === "dashboard" && driverId && (
               <>
-                {/* Mobile: opens/closes the slide-over drawer */}
+                {/* Mobile: opens/closes the slide-over drawer — animated
+                    3-bar-to-X morph (Concept A) instead of an icon swap,
+                    each bar carrying its own shadow so they read as
+                    separate embossed rods, not flat lines. */}
                 <button
                   onClick={() => setSidebarOpen((v) => !v)}
-                  className="emboss-btn flex h-9 w-9 items-center justify-center rounded-lg text-[#2C2C2A] lg:hidden"
+                  className="emboss-btn relative flex h-9 w-9 items-center justify-center rounded-lg lg:hidden"
                   aria-label="Toggle menu"
                 >
-                  {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+                  <span
+                    className="absolute h-[2.5px] w-5 rounded-full bg-[#2C2C2A] transition-transform duration-300"
+                    style={{
+                      top: sidebarOpen ? "50%" : "34%",
+                      transform: sidebarOpen ? "translateY(-50%) rotate(45deg)" : "translateY(-50%)",
+                      boxShadow: "1px 1px 1px rgba(0,0,0,0.25)",
+                      transitionTimingFunction: "cubic-bezier(.68,-0.4,.27,1.4)",
+                    }}
+                  />
+                  <span
+                    className="absolute top-1/2 h-[2.5px] w-5 -translate-y-1/2 rounded-full bg-[#2C2C2A] transition-opacity duration-150"
+                    style={{ opacity: sidebarOpen ? 0 : 1, boxShadow: "1px 1px 1px rgba(0,0,0,0.25)" }}
+                  />
+                  <span
+                    className="absolute h-[2.5px] w-5 rounded-full bg-[#2C2C2A] transition-transform duration-300"
+                    style={{
+                      top: sidebarOpen ? "50%" : "66%",
+                      transform: sidebarOpen ? "translateY(-50%) rotate(-45deg)" : "translateY(-50%)",
+                      boxShadow: "1px 1px 1px rgba(0,0,0,0.25)",
+                      transitionTimingFunction: "cubic-bezier(.68,-0.4,.27,1.4)",
+                    }}
+                  />
                 </button>
                 {/* Desktop: collapses/expands the fixed sidebar */}
                 <button
@@ -406,10 +428,10 @@ export default function App() {
                 } ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"}`}
                 style={{
                   top: sidebarOpen ? 0 : undefined,
-                  background: "linear-gradient(180deg, #1B2430, #131A24)",
+                  background: "#0F172A",
                 }}
               >
-                <nav className="flex flex-col gap-1">
+                <nav className="flex flex-col gap-2.5">
                   {navigationItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = dashboardScreen === item.id;
@@ -418,30 +440,38 @@ export default function App() {
                         key={item.id}
                         onClick={() => selectScreen(item.id)}
                         title={sidebarCollapsed ? item.label : undefined}
-                        className={`relative flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-sm font-medium cursor-pointer transition-all text-left ${
+                        className={`relative flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-medium cursor-pointer text-left ${
                           sidebarCollapsed ? "lg:justify-center lg:px-0" : ""
-                        } ${
-                          isActive
-                            ? "text-white"
-                            : "text-[#9AA3B2] hover:bg-white/5 hover:text-white"
-                        }`}
-                        style={
-                          isActive
-                            ? {
-                                background: "linear-gradient(135deg, #378ADD, #0C447C)",
-                                boxShadow: "2px 2px 8px rgba(4,44,83,0.5)",
-                              }
-                            : undefined
-                        }
+                        } ${isActive ? "text-white" : "text-[#9CA3B5] hover:text-white"}`}
+                        style={{
+                          background: isActive ? "linear-gradient(145deg, #2563EB, #1D4ED8)" : "#16213A",
+                          boxShadow: isActive
+                            ? "inset 2px 2px 5px rgba(0,0,0,0.35), inset -1px -1px 3px rgba(255,255,255,0.15), 0 4px 14px rgba(37,99,235,0.35)"
+                            : "2px 3px 6px rgba(0,0,0,0.35), -1px -1px 3px rgba(255,255,255,0.03)",
+                          transform: isActive ? "translateY(1px)" : undefined,
+                          transition: "background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, color 0.2s ease",
+                        }}
                       >
-                        <Icon size={16} className="shrink-0" />
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] ${
+                            sidebarCollapsed ? "" : ""
+                          }`}
+                          style={{
+                            background: isActive ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)",
+                            boxShadow: isActive
+                              ? "inset 1px 1px 3px rgba(0,0,0,0.25)"
+                              : "inset 1px 1px 2px rgba(0,0,0,0.3), inset -1px -1px 1px rgba(255,255,255,0.06)",
+                          }}
+                        >
+                          <Icon size={16} />
+                        </span>
                         <span className={sidebarCollapsed ? "lg:hidden" : ""}>{item.label}</span>
                         {item.id === "bookings" && unviewedCount > 0 && (
                           <span
                             className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[11px] font-bold text-white ${
                               sidebarCollapsed ? "lg:absolute lg:right-1 lg:top-1 lg:ml-0" : ""
                             }`}
-                            style={{ background: "#D64545" }}
+                            style={{ background: "#D64545", boxShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
                           >
                             {unviewedCount > 99 ? "99+" : unviewedCount}
                           </span>
