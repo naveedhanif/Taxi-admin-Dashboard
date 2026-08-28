@@ -117,6 +117,12 @@ export default function App() {
   // is the one source of truth for "who's logged in right now."
   const [driverId, setDriverId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
+  // Whether the driver has manually marked themselves as taking bookings
+  // today — a completely separate concept from "busy right now" (which
+  // is derived automatically from having an active trip). Requires a
+  // new `is_online` column — see the SQL note in the delivery message.
+  const [isOnline, setIsOnline] = useState(true);
+  const [togglingOnline, setTogglingOnline] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
   // A ref, not state — needs to be read synchronously within the same
   // onAuthStateChange callback invocation to detect a genuine sign-in
@@ -152,10 +158,11 @@ export default function App() {
 
           const { data } = await supabase
             .from("drivers")
-            .select("business_name")
+            .select("business_name, is_online")
             .eq("id", result.driverId)
             .single();
           setBusinessName(data?.business_name ?? null);
+          setIsOnline(data?.is_online ?? true);
         }
       } else {
         driverIdRef.current = null;
@@ -190,6 +197,19 @@ export default function App() {
       supabase.removeChannel(channel);
     };
   }, [driverId]);
+
+  async function handleToggleOnline() {
+    if (!driverId || togglingOnline) return;
+    const next = !isOnline;
+    setTogglingOnline(true);
+    setIsOnline(next); // optimistic — feels instant, rolled back below if it fails
+    const { error } = await supabase.from("drivers").update({ is_online: next }).eq("id", driverId);
+    setTogglingOnline(false);
+    if (error) {
+      setIsOnline(!next); // roll back
+      window.alert(`Couldn't update your availability: ${error.message}`);
+    }
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -258,6 +278,21 @@ export default function App() {
                 {businessName || "Driver Dashboard"} <span className="text-xs font-normal text-[#5F5E5A]">— Driver SaaS</span>
               </div>
             </div>
+            {driverId && (
+              <button
+                onClick={handleToggleOnline}
+                disabled={togglingOnline}
+                className="emboss-btn ml-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold cursor-pointer disabled:opacity-70"
+                style={{ color: isOnline ? "#27500A" : "#5F5E5A" }}
+                title={isOnline ? "Taking bookings today — tap to go offline" : "Not taking bookings — tap to go online"}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: isOnline ? "#4CAF50" : "#B4B2A9" }}
+                />
+                {isOnline ? "Online" : "Offline"}
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
