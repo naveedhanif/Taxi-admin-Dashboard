@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import StepProgressIndicator from "./components/StepProgressIndicator";
 import BusinessDetailsStep from "./components/BusinessDetailsStep";
 import StripeConnectStep from "./components/StripeConnectStep";
