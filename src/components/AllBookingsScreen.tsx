@@ -112,17 +112,22 @@ function formatDateTime(iso: string) {
 }
 
 const VALID_STATUS_FILTERS = ["all", "pending", "confirmed", "en_route", "arrived", "in_progress", "completed", "canceled"];
-const VALID_DATE_FILTERS = ["all", "today", "tomorrow", "this_week", "upcoming", "past"];
+const VALID_DATE_FILTERS = ["all", "today", "yesterday", "tomorrow", "this_week", "upcoming", "past", "custom"];
 
 // Boundaries computed fresh each call from the driver's own device clock
 // — matches how the rest of this file already treats "now" (formatTime,
 // the sort comparator), so a date filter and the sort order never
-// disagree about what "today" means.
-function matchesDateFilter(scheduledTime: string, filter: string): boolean {
+// disagree about what "today" means. customStart/customEnd are only
+// consulted when filter === "custom" — both are yyyy-mm-dd strings from
+// native <input type="date">, interpreted as local-time day boundaries
+// to match how "today"/"tomorrow" are computed below.
+function matchesDateFilter(scheduledTime: string, filter: string, customStart: string, customEnd: string): boolean {
   if (filter === "all") return true;
   const d = new Date(scheduledTime);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
   const startOfTomorrow = new Date(startOfToday);
   startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
   const startOfDayAfterTomorrow = new Date(startOfTomorrow);
@@ -133,6 +138,8 @@ function matchesDateFilter(scheduledTime: string, filter: string): boolean {
   switch (filter) {
     case "today":
       return d >= startOfToday && d < startOfTomorrow;
+    case "yesterday":
+      return d >= startOfYesterday && d < startOfToday;
     case "tomorrow":
       return d >= startOfTomorrow && d < startOfDayAfterTomorrow;
     case "this_week":
@@ -141,6 +148,15 @@ function matchesDateFilter(scheduledTime: string, filter: string): boolean {
       return d >= now;
     case "past":
       return d < now;
+    case "custom": {
+      if (!customStart && !customEnd) return true;
+      // End date is inclusive of the whole day, not just midnight.
+      const rangeStart = customStart ? new Date(customStart + "T00:00:00") : null;
+      const rangeEnd = customEnd ? new Date(customEnd + "T23:59:59") : null;
+      if (rangeStart && d < rangeStart) return false;
+      if (rangeEnd && d > rangeEnd) return false;
+      return true;
+    }
     default:
       return true;
   }
@@ -197,6 +213,20 @@ export default function AllBookingsScreen({
       return saved && VALID_DATE_FILTERS.includes(saved) ? saved : "all";
     } catch {
       return "all";
+    }
+  });
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    try {
+      return localStorage.getItem(`taxi_admin_bookings_customstart_${driverId}`) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    try {
+      return localStorage.getItem(`taxi_admin_bookings_customend_${driverId}`) || "";
+    } catch {
+      return "";
     }
   });
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -265,6 +295,16 @@ export default function AllBookingsScreen({
       // Ignore.
     }
   }, [dateFilter, driverId]);
+
+  useEffect(() => {
+    if (!driverId) return;
+    try {
+      localStorage.setItem(`taxi_admin_bookings_customstart_${driverId}`, customStartDate);
+      localStorage.setItem(`taxi_admin_bookings_customend_${driverId}`, customEndDate);
+    } catch {
+      // Ignore.
+    }
+  }, [customStartDate, customEndDate, driverId]);
 
   useEffect(() => {
     if (!driverId) {
@@ -346,16 +386,18 @@ export default function AllBookingsScreen({
   const DATE_FILTER_OPTIONS = [
     { value: "all", label: "All dates" },
     { value: "today", label: "Today" },
+    { value: "yesterday", label: "Yesterday" },
     { value: "tomorrow", label: "Tomorrow" },
     { value: "this_week", label: "This week" },
     { value: "upcoming", label: "Upcoming" },
     { value: "past", label: "Past" },
+    { value: "custom", label: "Custom range…" },
   ];
 
   const filteredBookings = bookingsList
     .filter((b) => {
       const matchesStatus = filterStatus === "all" || b.status === filterStatus;
-      const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter);
+      const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter, customStartDate, customEndDate);
       const matchesSearch =
         b.passenger_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.pickup_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -520,32 +562,9 @@ export default function AllBookingsScreen({
         </div>
       </div>
 
-      {/* Quick date filter — a scrollable row of chips rather than a
-          dropdown, since this is the filter drivers reach for most
-          often ("what's on today") and chips make the current choice
-          visible at a glance without opening anything. */}
-      <div className="mb-3 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
-        {DATE_FILTER_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setDateFilter(opt.value)}
-            className={`emboss-btn shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold cursor-pointer ${
-              dateFilter === opt.value ? "emboss-selected text-white" : "text-[#5F5E5A]"
-            }`}
-            style={
-              dateFilter === opt.value
-                ? { background: "linear-gradient(135deg, #378ADD, #0C447C)", boxShadow: "inset 2px 2px 5px rgba(4,44,83,0.5), inset -1px -1px 3px rgba(133,183,235,0.3)" }
-                : undefined
-            }
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
       {/* Filter and Search Bar */}
       <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="relative md:col-span-2">
+        <div className="relative md:col-span-1">
           <input
             type="text"
             value={searchQuery}
@@ -570,7 +589,59 @@ export default function AllBookingsScreen({
           </select>
           <Filter size={14} className="absolute right-3.5 top-3.5 text-[#5F5E5A] pointer-events-none" />
         </div>
+
+        <div className="relative">
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="emboss-input w-full rounded-xl px-3.5 py-2.5 pr-8 text-xs font-medium text-[#2C2C2A] appearance-none"
+          >
+            {DATE_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <Calendar size={14} className="absolute right-3.5 top-3.5 text-[#5F5E5A] pointer-events-none" />
+        </div>
       </div>
+
+      {/* Custom range inputs — only shown once "Custom range…" is picked
+          above, rather than always taking up space for a filter most
+          drivers won't use most of the time. */}
+      {dateFilter === "custom" && (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-[#E4E2DA] bg-white p-4 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">To</label>
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+            />
+          </div>
+          {(customStartDate || customEndDate) && (
+            <button
+              onClick={() => {
+                setCustomStartDate("");
+                setCustomEndDate("");
+              }}
+              className="emboss-btn shrink-0 rounded-lg px-4 py-2 text-xs font-medium text-[#5F5E5A] cursor-pointer"
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Bookings List Card */}
       <div className="rounded-xl border border-[#E4E2DA] bg-white p-5">
@@ -580,7 +651,14 @@ export default function AllBookingsScreen({
             Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong>
             {dateFilter !== "all" && (
               <>
-                {" "}· <strong className="text-[#2C2C2A]">{DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}</strong>
+                {" "}·{" "}
+                <strong className="text-[#2C2C2A]">
+                  {dateFilter === "custom"
+                    ? customStartDate || customEndDate
+                      ? `${customStartDate || "…"} to ${customEndDate || "…"}`
+                      : "Custom range"
+                    : DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
+                </strong>
               </>
             )}
           </span>
