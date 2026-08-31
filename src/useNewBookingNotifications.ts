@@ -127,13 +127,23 @@ export function useNewBookingNotifications(driverId: string | null) {
             // driver app leans hard on audio for new ride requests. The
             // repeat after 900ms is deliberate: one short chime is easy
             // to miss entirely; two makes it register as "something
-            // happened" without becoming a persistent siren.
-            const playAlert = () =>
-              audioRef.current?.play().catch(() => {
+            // happened" without becoming a persistent siren. currentTime
+            // is reset before every play() — without it, calling play()
+            // on an element that's already finished playing is a silent
+            // no-op in many browsers, which would otherwise break both
+            // this same-notification repeat AND every notification
+            // after the very first one for a driver receiving several
+            // bookings in a row.
+            const playAlert = () => {
+              const audio = audioRef.current;
+              if (!audio) return;
+              audio.currentTime = 0;
+              audio.play().catch(() => {
                 // Browsers block autoplay until the user has interacted
                 // with the page at least once — fails silently the
                 // first time, which is expected and fine.
               });
+            };
             playAlert();
             setTimeout(playAlert, 900);
 

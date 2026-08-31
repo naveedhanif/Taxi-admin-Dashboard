@@ -191,7 +191,10 @@ export default function App() {
       if (audio) {
         audio
           .play()
-          .then(() => audio.pause())
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          })
           .catch(() => {
             // Nothing to do — will simply try again on the next tap.
           });
