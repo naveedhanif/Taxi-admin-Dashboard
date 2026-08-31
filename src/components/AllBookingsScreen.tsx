@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
+import ChatPanel from "./ChatPanel";
 import { formatPhoneForLinks } from "../phoneLinks";
 
 export interface Booking {
@@ -780,6 +781,13 @@ export default function AllBookingsScreen({
                   );
                 })()}
               </div>
+
+              {/* In-app chat — addition to, not replacement for, call/
+                  WhatsApp above. Only shown for active (not completed/
+                  cancelled) bookings. */}
+              {!["completed", "canceled"].includes(selectedBooking.status) && (
+                <ChatPanel bookingId={selectedBooking.id} />
+              )}
 
               <div className="rounded-lg bg-[#F1EFE8] p-3 space-y-2">
                 <div className="flex items-start gap-2">

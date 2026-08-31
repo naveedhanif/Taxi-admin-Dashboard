@@ -10,6 +10,7 @@ import OverviewDashboard from "./components/OverviewDashboard";
 import LoginScreen from "./components/LoginScreen";
 import AllBookingsScreen from "./components/AllBookingsScreen";
 import SettingsScreen from "./components/SettingsScreen";
+import EarningsScreen from "./components/EarningsScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
@@ -23,19 +24,21 @@ import {
   LogOut,
   Calendar,
   Settings as SettingsIcon,
+  TrendingUp,
   Car,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 
-const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings" };
-function screenFromPath(pathname: string): "overview" | "bookings" | "settings" {
+const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings", earnings: "/earnings" };
+function screenFromPath(pathname: string): "overview" | "bookings" | "settings" | "earnings" {
   if (pathname.startsWith("/bookings")) return "bookings";
   if (pathname.startsWith("/settings")) return "settings";
+  if (pathname.startsWith("/earnings")) return "earnings";
   return "overview";
 }
 
-function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" {
+function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" | "earnings" {
   const pathScreen = screenFromPath(window.location.pathname);
   // Landing exactly on "/" is ambiguous: it's either a real, deliberate
   // navigation to Dashboard, OR — critically — it's iOS relaunching an
@@ -49,7 +52,7 @@ function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings
   if (window.location.pathname === "/") {
     try {
       const saved = localStorage.getItem("taxi_admin_dashboard_screen");
-      if (saved === "bookings" || saved === "settings") return saved;
+      if (saved === "bookings" || saved === "settings" || saved === "earnings") return saved;
     } catch {
       // Ignore — storage unavailable, just use the path-derived default.
     }
@@ -62,7 +65,7 @@ export default function App() {
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
   // Two layers working together, not one or the other — see
   // initialDashboardScreen()'s comment for why URL alone wasn't enough.
-  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings">(
+  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings" | "earnings">(
     initialDashboardScreen
   );
   // Mobile: drawer is closed by default, opened via hamburger.
@@ -89,7 +92,7 @@ export default function App() {
       window.history.pushState(null, "", targetPath);
       setCurrentPath(targetPath);
     }
-    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings") {
+    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings" || dashboardScreen === "earnings") {
       try {
         localStorage.setItem("taxi_admin_dashboard_screen", dashboardScreen);
       } catch {
@@ -269,6 +272,7 @@ export default function App() {
   const navigationItems = [
     { id: "overview", label: "Dashboard", icon: LayoutDashboard },
     { id: "bookings", label: "Bookings", icon: Calendar },
+    { id: "earnings", label: "Earnings", icon: TrendingUp },
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
 
@@ -552,6 +556,7 @@ export default function App() {
                 />
               )}
               {dashboardScreen === "settings" && <SettingsScreen driverId={driverId} />}
+              {dashboardScreen === "earnings" && <EarningsScreen driverId={driverId} />}
             </div>
           </main>
         </div>
