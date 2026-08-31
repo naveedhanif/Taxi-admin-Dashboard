@@ -175,6 +175,36 @@ export default function App() {
 
   const { notifications, dismiss, unviewedCount, audioRef } = useNewBookingNotifications(driverId);
 
+  // Unlocks audio playback for mobile browsers. Most mobile browsers
+  // (iOS Safari in particular) block .play() calls that don't trace
+  // back to a genuine user tap — a WebSocket callback (a new booking
+  // arriving) doesn't count as one, which is exactly why the alert
+  // sound worked on desktop Chrome but was silently blocked on mobile.
+  // Priming the element with a real play()+immediate pause() inside
+  // the very first tap anywhere on the page satisfies that requirement
+  // once, after which programmatic play() calls succeed for the rest
+  // of the session — this is the standard fix for this exact class of
+  // mobile autoplay restriction.
+  useEffect(() => {
+    function unlockAudio() {
+      const audio = audioRef.current;
+      if (audio) {
+        audio
+          .play()
+          .then(() => audio.pause())
+          .catch(() => {
+            // Nothing to do — will simply try again on the next tap.
+          });
+      }
+    }
+    document.addEventListener("click", unlockAudio, { once: true });
+    document.addEventListener("touchstart", unlockAudio, { once: true });
+    return () => {
+      document.removeEventListener("click", unlockAudio);
+      document.removeEventListener("touchstart", unlockAudio);
+    };
+  }, [audioRef]);
+
   // Set when a notification toast is clicked — AllBookingsScreen watches
   // this and opens the matching booking's detail modal, then clears it
   // via onOpenBookingHandled below.
