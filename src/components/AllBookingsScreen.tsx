@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { formatPhoneForLinks } from "../phoneLinks";
 
@@ -882,90 +882,94 @@ export default function AllBookingsScreen({
                 already En Route keeps "Confirm" locked too, instead of
                 it re-enabling the moment the status moves past it. */}
             <div className="mt-5 border-t border-[#E4E2DA] pt-4">
-              <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-[#5F5E5A]">
-                Update Booking Status:
-                {updatingId === selectedBooking.id && <Loader2 size={12} className="animate-spin" />}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {(() => {
-                  const isBusy = updatingId === selectedBooking.id;
-                  const isCurrent = (s: Booking["status"]) => selectedBooking.status === s;
-                  // Natural forward progression. "canceled" is handled
-                  // separately below since it isn't part of this
-                  // sequence — a booking can be cancelled from almost
-                  // any point, not just reached in order.
-                  const STATUS_ORDER: Record<string, number> = {
-                    pending: 0,
-                    confirmed: 1,
-                    en_route: 2,
-                    arrived: 3,
-                    in_progress: 4,
-                    completed: 5,
-                  };
-                  const currentRank = STATUS_ORDER[selectedBooking.status] ?? -1;
-                  const isCanceled = selectedBooking.status === "canceled";
-                  // Reached or passed this stage already — including
-                  // being cancelled, since none of these forward
-                  // actions make sense on a cancelled booking either.
-                  const isLocked = (s: keyof typeof STATUS_ORDER) => isCanceled || currentRank >= STATUS_ORDER[s];
-                  return (
-                    <>
+              {(() => {
+                const isBusy = updatingId === selectedBooking.id;
+                const isCanceled = selectedBooking.status === "canceled";
+                const isCompleted = selectedBooking.status === "completed";
+
+                // One clear next action instead of four buttons shown at
+                // once — matches how Uber/Bolt/Lyft's own driver apps
+                // handle this: at any moment there's exactly one thing
+                // for the driver to do next, not a menu of options to
+                // parse. Also completes the flow properly: the previous
+                // 4-button version never actually let a driver set
+                // "Arrived" or "In Progress" at all, which meant those
+                // two passenger notification stages (already built into
+                // the passenger app) could never fire in real use.
+                const STAGES: { key: Booking["status"]; actionLabel: string; icon: typeof CheckCircle2; colors: string }[] = [
+                  { key: "confirmed", actionLabel: "Confirm booking", icon: CheckCircle2, colors: "#378ADD, #0C447C" },
+                  { key: "en_route", actionLabel: "Start heading to pickup", icon: Navigation, colors: "#378ADD, #0C447C" },
+                  { key: "arrived", actionLabel: "I've arrived", icon: MapPin, colors: "#0EA5A5, #0B7A7A" },
+                  { key: "in_progress", actionLabel: "Start trip", icon: PlayCircle, colors: "#0EA5A5, #0B7A7A" },
+                  { key: "completed", actionLabel: "Complete trip", icon: FlagTriangleRight, colors: "#3B9B3B, #27500A" },
+                ];
+                const STATUS_ORDER: Record<string, number> = { pending: 0, confirmed: 1, en_route: 2, arrived: 3, in_progress: 4, completed: 5 };
+                const currentRank = STATUS_ORDER[selectedBooking.status] ?? -1;
+                const nextStage = STAGES.find((s) => STATUS_ORDER[s.key] > currentRank);
+
+                return (
+                  <>
+                    {/* Progress dots — quick "where are we" glance without needing 4 separate button states to read */}
+                    {!isCanceled && (
+                      <div className="mb-4 flex items-center">
+                        {STAGES.map((s, i) => (
+                          <div key={s.key} className="flex flex-1 items-center last:flex-none">
+                            <div
+                              className="h-2 w-2 rounded-full transition-colors"
+                              style={{ background: STATUS_ORDER[s.key] <= currentRank ? "#185FA5" : "#D3D1C7" }}
+                            />
+                            {i < STAGES.length - 1 && (
+                              <div
+                                className="mx-1 h-0.5 flex-1 transition-colors"
+                                style={{ background: STATUS_ORDER[s.key] < currentRank ? "#185FA5" : "#D3D1C7" }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {isCanceled ? (
+                      <div className="rounded-xl bg-[#FEE2E2] px-4 py-3 text-center text-sm font-semibold text-[#991B1B]">
+                        This booking was cancelled
+                      </div>
+                    ) : isCompleted ? (
+                      <div className="rounded-xl bg-[#EAF3DE] px-4 py-3 text-center text-sm font-semibold text-[#27500A]">
+                        Trip completed
+                      </div>
+                    ) : nextStage ? (
                       <button
-                        disabled={isBusy || isLocked("confirmed")}
-                        onClick={() => updateBookingStatus(selectedBooking.id, "confirmed")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 ${
-                          isCurrent("confirmed")
-                            ? "emboss-btn emboss-selected text-[#185FA5] bg-[#E1F0FF]"
-                            : isLocked("confirmed")
-                            ? "emboss-btn text-[#8C8977]"
-                            : "emboss-btn-primary text-white"
-                        }`}
+                        disabled={isBusy}
+                        onClick={() => updateBookingStatus(selectedBooking.id, nextStage.key)}
+                        className="flex w-full items-center justify-center gap-2.5 rounded-2xl py-4 text-base font-bold text-white cursor-pointer disabled:opacity-70"
+                        style={{
+                          background: `linear-gradient(135deg, ${nextStage.colors})`,
+                          boxShadow: `3px 3px 10px rgba(4,44,83,0.3)`,
+                        }}
                       >
-                        <CheckCircle2 size={20} />
-                        {isCurrent("confirmed") ? "Confirmed" : "Confirm"}
+                        {isBusy ? <Loader2 size={20} className="animate-spin" /> : <nextStage.icon size={20} />}
+                        {isBusy ? "Updating…" : nextStage.actionLabel}
                       </button>
+                    ) : null}
+
+                    {/* De-emphasized, not hidden — a driver genuinely mid-
+                        trip may still need to cancel for a real reason
+                        (no-show, emergency), so this stays reachable via
+                        the same escalated confirmation modal as before.
+                        It's just no longer equal visual weight to the
+                        primary action, which is what caused accidental
+                        taps in the old 4-button grid. */}
+                    {!isCanceled && !isCompleted && (
                       <button
-                        disabled={isBusy || isLocked("en_route")}
-                        onClick={() => updateBookingStatus(selectedBooking.id, "en_route")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 emboss-btn ${
-                          isCurrent("en_route")
-                            ? "emboss-selected bg-[#E1F0FF] text-[#0C4A6E]"
-                            : isLocked("en_route")
-                            ? "text-[#8C8977]"
-                            : "text-[#2C2C2A]"
-                        }`}
-                      >
-                        <Navigation size={20} />
-                        {isCurrent("en_route") ? "En Route" : "Mark En Route"}
-                      </button>
-                      <button
-                        disabled={isBusy || isLocked("completed")}
-                        onClick={() => updateBookingStatus(selectedBooking.id, "completed")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 emboss-btn ${
-                          isCurrent("completed")
-                            ? "emboss-selected text-[#27500A] bg-[#EAF3DE]"
-                            : isLocked("completed")
-                            ? "text-[#8C8977]"
-                            : "text-[#27500A] bg-[#EAF3DE]"
-                        }`}
-                      >
-                        <FlagTriangleRight size={20} />
-                        {isCurrent("completed") ? "Completed" : "Complete"}
-                      </button>
-                      <button
-                        disabled={isBusy || isCanceled || selectedBooking.status === "completed"}
                         onClick={() => setShowCancelConfirm(true)}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-90 emboss-btn ${
-                          isCanceled ? "emboss-selected bg-[#FEE2E2] text-[#991B1B]" : "text-[#991B1B]"
-                        }`}
+                        className="mt-3 block w-full text-center text-xs font-medium text-[#B4B2A9] cursor-pointer underline decoration-1 underline-offset-2 hover:text-[#991B1B]"
                       >
-                        <XCircle size={20} />
-                        {isCanceled ? "Cancelled" : "Cancel"}
+                        Cancel booking
                       </button>
-                    </>
-                  );
-                })()}
-              </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div className="mt-6 flex justify-end">
