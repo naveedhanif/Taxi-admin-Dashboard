@@ -173,7 +173,7 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const { notifications, dismiss, unviewedCount } = useNewBookingNotifications(driverId);
+  const { notifications, dismiss, unviewedCount, audioRef } = useNewBookingNotifications(driverId);
 
   // Set when a notification toast is clicked — AllBookingsScreen watches
   // this and opens the matching booking's detail modal, then clears it
@@ -246,6 +246,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] text-[#2C2C2A] font-sans antialiased">
+      {/* The hook already calls audioRef.current?.play() on every new
+          booking — this element is what it was missing. Without a real
+          <audio> to attach to, that call silently did nothing, which is
+          the actual reason new bookings were arriving completely
+          silently despite the alert logic being written. preload="auto"
+          so the very first alert isn't delayed by a fetch. */}
+      <audio ref={audioRef} src="/new-booking-alert.wav" preload="auto" />
       <NotificationToast notifications={notifications} onDismiss={dismiss} onOpenBooking={handleOpenBookingFromNotification} />
 
       {/* Top bar — branding + onboarding/dashboard mode toggle only.

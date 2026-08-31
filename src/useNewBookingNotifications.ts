@@ -121,11 +121,29 @@ export function useNewBookingNotifications(driverId: string | null) {
           if (oldStatus === "awaiting_payment" && newStatus === "pending") {
             const booking = payload.new as BookingNotification;
             setNotifications((prev) => [booking, ...prev]);
-            audioRef.current?.play().catch(() => {
-              // Browsers block autoplay until the user has interacted with
-              // the page at least once — this fails silently the first
-              // time, which is expected and fine.
-            });
+
+            // Sound + vibration — a silent toast is easy to miss if the
+            // driver isn't looking at the screen, same reason Uber's
+            // driver app leans hard on audio for new ride requests. The
+            // repeat after 900ms is deliberate: one short chime is easy
+            // to miss entirely; two makes it register as "something
+            // happened" without becoming a persistent siren.
+            const playAlert = () =>
+              audioRef.current?.play().catch(() => {
+                // Browsers block autoplay until the user has interacted
+                // with the page at least once — fails silently the
+                // first time, which is expected and fine.
+              });
+            playAlert();
+            setTimeout(playAlert, 900);
+
+            if ("vibrate" in navigator) {
+              try {
+                navigator.vibrate([120, 80, 120]);
+              } catch {
+                // Not supported on this device/browser — ignore.
+              }
+            }
           }
           // Any change to this driver's bookings (new pending booking,
           // status moving on, driver_viewed_at being set) can shift the
