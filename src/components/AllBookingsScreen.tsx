@@ -10,6 +10,7 @@ export interface Booking {
   passenger_phone: string;
   pickup_address: string;
   dropoff_address: string;
+  stops: { address: string; lat: number; lng: number }[];
   scheduled_time: string;
   estimated_fare: number | null;
   final_fare: number | null;
@@ -319,7 +320,7 @@ export default function AllBookingsScreen({
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at")
+        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at")
         .eq("driver_id", driverId)
         // Exclude bookings the passenger hasn't actually paid for yet —
         // a booking sits in "awaiting_payment" between PaymentIntent
@@ -703,6 +704,11 @@ export default function AllBookingsScreen({
                       <span className="flex items-center gap-1">
                         <MapPin size={12} className="text-[#185FA5]" /> {b.pickup_address}
                       </span>
+                      {b.stops && b.stops.length > 0 && (
+                        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#F1EFE8", color: "#B4772E" }}>
+                          +{b.stops.length} stop{b.stops.length === 1 ? "" : "s"}
+                        </span>
+                      )}
                       <span>→</span>
                       <span>{b.dropoff_address}</span>
                     </div>
@@ -797,6 +803,15 @@ export default function AllBookingsScreen({
                     <div className="font-medium text-[#2C2C2A]">{selectedBooking.pickup_address}</div>
                   </div>
                 </div>
+                {(selectedBooking.stops || []).map((stop, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <MapPin size={13} className="mt-0.5 text-[#B4772E]" />
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-[#5F5E5A]">Stop {i + 1}</div>
+                      <div className="font-medium text-[#2C2C2A]">{stop.address}</div>
+                    </div>
+                  </div>
+                ))}
                 <div className="flex items-start gap-2">
                   <MapPin size={13} className="mt-0.5 text-[#639922]" />
                   <div>
