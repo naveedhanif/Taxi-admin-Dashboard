@@ -40,6 +40,41 @@ export default function ChatPanel({ bookingId }: { bookingId: string }) {
   // (e.g. the messages table/functions not deployed yet).
   const [loadError, setLoadError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  // Tracks which message ids we've already seen, so a genuinely NEW
+  // message from the other party (not our own optimistic send, not
+  // something already in history) triggers a sound. Skips alerting on
+  // the very first load — that's just history, not something that
+  // just happened — same "skip first read" pattern used for booking-
+  // status notifications elsewhere in this app.
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const hasLoadedOnceRef = useRef(false);
+
+  // Mobile audio unlock — same reasoning as the booking-alert sound:
+  // most mobile browsers block .play() unless it traces back to a real
+  // user tap, and a poll result arriving isn't one.
+  useEffect(() => {
+    function unlockAudio() {
+      const audio = audioRef.current;
+      if (audio) {
+        audio
+          .play()
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          })
+          .catch(() => {
+            // Will simply try again on the next tap.
+          });
+      }
+    }
+    document.addEventListener("click", unlockAudio, { once: true });
+    document.addEventListener("touchstart", unlockAudio, { once: true });
+    return () => {
+      document.removeEventListener("click", unlockAudio);
+      document.removeEventListener("touchstart", unlockAudio);
+    };
+  }, []);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -54,7 +89,29 @@ export default function ChatPanel({ bookingId }: { bookingId: string }) {
         return;
       }
       setLoadError("");
-      setMessages(result.messages || []);
+      const fetched: Message[] = result.messages || [];
+
+      if (hasLoadedOnceRef.current) {
+        const newIncoming = fetched.some((m) => m.sender_role === "passenger" && !knownIdsRef.current.has(m.id));
+        if (newIncoming) {
+          const audio = audioRef.current;
+          if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+          }
+          if ("vibrate" in navigator) {
+            try {
+              navigator.vibrate(60);
+            } catch {
+              // Not supported — ignore.
+            }
+          }
+        }
+      }
+      knownIdsRef.current = new Set(fetched.map((m) => m.id));
+      hasLoadedOnceRef.current = true;
+
+      setMessages(fetched);
       setLoaded(true);
     }
     load();
@@ -86,6 +143,7 @@ export default function ChatPanel({ bookingId }: { bookingId: string }) {
 
   return (
     <div className="rounded-xl" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+      <audio ref={audioRef} src="/message-pop.wav" preload="auto" />
       <div className="flex items-center gap-2 border-b border-[#ECE9E0] px-3.5 py-2.5 text-xs font-semibold text-[#5F5E5A]">
         <MessageCircle size={13} /> Messages
       </div>

@@ -1,19 +1,21 @@
 import { useState } from "react";
-import { Car, Percent, CreditCard, ShieldCheck, Building2, Clock } from "lucide-react";
+import { Car, Percent, CreditCard, ShieldCheck, Building2, Clock, Star } from "lucide-react";
 import VehicleInfoScreen from "./VehicleInfoScreen";
 import FareRulesScreen from "./FareRulesScreen";
 import StripeOnboardingScreen from "./StripeOnboardingScreen";
 import LicenceScreen from "./LicenceScreen";
 import BusinessProfileScreen from "./BusinessProfileScreen";
 import ScheduleScreen from "./ScheduleScreen";
+import ReviewsScreen from "./ReviewsScreen";
 
-type SettingsTab = "profile" | "vehicle" | "fare_rules" | "stripe" | "licence" | "schedule";
+type SettingsTab = "profile" | "vehicle" | "fare_rules" | "stripe" | "licence" | "schedule" | "reviews";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Car }[] = [
   { id: "profile", label: "Business Profile", icon: Building2 },
   { id: "vehicle", label: "Vehicle", icon: Car },
   { id: "fare_rules", label: "Fare Rules & Discounts", icon: Percent },
   { id: "schedule", label: "Working Hours", icon: Clock },
+  { id: "reviews", label: "Reviews", icon: Star },
   { id: "stripe", label: "Stripe", icon: CreditCard },
   { id: "licence", label: "SPSV Licence", icon: ShieldCheck },
 ];
@@ -64,6 +66,7 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
       {tab === "vehicle" && <VehicleInfoScreen driverId={driverId} />}
       {tab === "fare_rules" && <FareRulesScreen driverId={driverId} />}
       {tab === "schedule" && <ScheduleScreen driverId={driverId} />}
+      {tab === "reviews" && <ReviewsScreen driverId={driverId} />}
       {tab === "stripe" && <StripeOnboardingScreen driverId={driverId} />}
       {tab === "licence" && <LicenceScreen driverId={driverId} />}
     </div>
