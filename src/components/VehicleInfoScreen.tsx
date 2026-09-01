@@ -2,6 +2,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { Car, ShieldCheck, Check, Save, Users, Hash, Palette, Loader2, AlertCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
+import PhotoUpload from "./PhotoUpload";
 
 // Mirrors the actual `vehicles` table columns in Supabase — that table
 // does not have year/vehicle_type/fuel_type/insurance_expiry/
@@ -79,6 +80,7 @@ export default function VehicleInfoScreen({ driverId }: { driverId: string | nul
   useGoogleFont();
   const [vehicle, setVehicle] = useState<VehicleData>(emptyVehicle);
   const [originalVehicle, setOriginalVehicle] = useState<VehicleData>(emptyVehicle);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -95,7 +97,7 @@ export default function VehicleInfoScreen({ driverId }: { driverId: string | nul
       setErrorMessage("");
       const { data, error } = await supabase
         .from("vehicles")
-        .select("make, model, color, plate, seats")
+        .select("make, model, color, plate, seats, photo_url")
         .eq("driver_id", driverId)
         .maybeSingle();
 
@@ -105,6 +107,7 @@ export default function VehicleInfoScreen({ driverId }: { driverId: string | nul
       } else if (data) {
         setVehicle(data as VehicleData);
         setOriginalVehicle(data as VehicleData);
+        setPhotoUrl((data as any).photo_url ?? null);
       }
       setLoading(false);
     })();
@@ -216,6 +219,16 @@ export default function VehicleInfoScreen({ driverId }: { driverId: string | nul
             </div>
           ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            {driverId && (
+              <PhotoUpload
+                driverId={driverId}
+                table="vehicles"
+                matchColumn="driver_id"
+                currentUrl={photoUrl}
+                onUploaded={setPhotoUrl}
+                label="Vehicle photo"
+              />
+            )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block font-medium text-[#2C2C2A]">Vehicle Make</label>

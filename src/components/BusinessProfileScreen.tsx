@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Loader2, AlertCircle, Save, Check, Phone, Building2 } from "lucide-react";
 import { supabase } from "../supabaseClient";
+import PhotoUpload from "./PhotoUpload";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -51,6 +52,7 @@ export default function BusinessProfileScreen({ driverId }: { driverId: string |
   useGoogleFont();
   const [businessName, setBusinessName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -66,7 +68,7 @@ export default function BusinessProfileScreen({ driverId }: { driverId: string |
       setLoading(true);
       const { data, error } = await supabase
         .from("drivers")
-        .select("business_name, phone_number")
+        .select("business_name, phone_number, photo_url")
         .eq("id", driverId)
         .single();
       if (cancelled) return;
@@ -75,6 +77,7 @@ export default function BusinessProfileScreen({ driverId }: { driverId: string |
       } else if (data) {
         setBusinessName(data.business_name ?? "");
         setPhoneNumber(data.phone_number ?? "");
+        setPhotoUrl(data.photo_url ?? null);
       }
       setLoading(false);
     })();
@@ -138,6 +141,16 @@ export default function BusinessProfileScreen({ driverId }: { driverId: string |
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="max-w-md space-y-5 text-sm">
+          {driverId && (
+            <PhotoUpload
+              driverId={driverId}
+              table="drivers"
+              matchColumn="id"
+              currentUrl={photoUrl}
+              onUploaded={setPhotoUrl}
+              label="Your photo"
+            />
+          )}
           <div>
             <label className="mb-1.5 flex items-center gap-1.5 font-medium text-[#2C2C2A]">
               <Building2 size={14} className="text-[#5F5E5A]" /> Business name
