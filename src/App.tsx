@@ -11,10 +11,10 @@ import LoginScreen from "./components/LoginScreen";
 import AllBookingsScreen from "./components/AllBookingsScreen";
 import SettingsScreen from "./components/SettingsScreen";
 import EarningsScreen from "./components/EarningsScreen";
+import CustomersScreen from "./components/CustomersScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
-import { enableDriverPush } from "./pushNotifications";
 import { supabase } from "./supabaseClient";
 import { getDriverForUser } from "./driverAuth";
 
@@ -29,17 +29,19 @@ import {
   Car,
   PanelLeftClose,
   PanelLeftOpen,
+  Users,
 } from "lucide-react";
 
-const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings", earnings: "/earnings" };
-function screenFromPath(pathname: string): "overview" | "bookings" | "settings" | "earnings" {
+const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings", earnings: "/earnings", customers: "/customers" };
+function screenFromPath(pathname: string): "overview" | "bookings" | "settings" | "earnings" | "customers" {
   if (pathname.startsWith("/bookings")) return "bookings";
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/earnings")) return "earnings";
+  if (pathname.startsWith("/customers")) return "customers";
   return "overview";
 }
 
-function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" | "earnings" {
+function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" | "earnings" | "customers" {
   const pathScreen = screenFromPath(window.location.pathname);
   // Landing exactly on "/" is ambiguous: it's either a real, deliberate
   // navigation to Dashboard, OR — critically — it's iOS relaunching an
@@ -53,7 +55,7 @@ function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings
   if (window.location.pathname === "/") {
     try {
       const saved = localStorage.getItem("taxi_admin_dashboard_screen");
-      if (saved === "bookings" || saved === "settings" || saved === "earnings") return saved;
+      if (saved === "bookings" || saved === "settings" || saved === "earnings" || saved === "customers") return saved;
     } catch {
       // Ignore — storage unavailable, just use the path-derived default.
     }
@@ -66,7 +68,7 @@ export default function App() {
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
   // Two layers working together, not one or the other — see
   // initialDashboardScreen()'s comment for why URL alone wasn't enough.
-  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings" | "earnings">(
+  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings" | "earnings" | "customers">(
     initialDashboardScreen
   );
   // Mobile: drawer is closed by default, opened via hamburger.
@@ -93,7 +95,7 @@ export default function App() {
       window.history.pushState(null, "", targetPath);
       setCurrentPath(targetPath);
     }
-    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings" || dashboardScreen === "earnings") {
+    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings" || dashboardScreen === "earnings" || dashboardScreen === "customers") {
       try {
         localStorage.setItem("taxi_admin_dashboard_screen", dashboardScreen);
       } catch {
@@ -178,34 +180,6 @@ export default function App() {
   }, []);
 
   const { notifications, dismiss, unviewedCount, audioRef } = useNewBookingNotifications(driverId);
-
-  // Auto-subscribes to real push notifications once a driver is known
-  // — no separate "enable" button needed, since useNewBookingNotifications
-  // above already triggers the native permission prompt (for the
-  // Badging API). If the driver already answered that, this just
-  // silently completes the subscription; if they denied it, or the
-  // browser doesn't support push, this quietly no-ops — every other
-  // feature in the app is unaffected either way. Runs once per driverId
-  // becoming available (e.g. on login), not on every render.
-  const pushSubscribedForRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!driverId) return;
-    if (pushSubscribedForRef.current === driverId) return;
-    pushSubscribedForRef.current = driverId;
-
-    (async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) return;
-      const result = await enableDriverPush(driverId, accessToken);
-      if (!result.enabled) {
-        // Expected in plenty of normal cases (permission not yet
-        // granted, unsupported browser) — not worth surfacing as an
-        // error anywhere, just don't get push this session.
-        console.info("Push notifications not enabled:", result.error);
-      }
-    })();
-  }, [driverId]);
 
   // Unlocks audio playback for mobile browsers. Most mobile browsers
   // (iOS Safari in particular) block .play() calls that don't trace
@@ -302,6 +276,7 @@ export default function App() {
     { id: "overview", label: "Dashboard", icon: LayoutDashboard },
     { id: "bookings", label: "Bookings", icon: Calendar },
     { id: "earnings", label: "Earnings", icon: TrendingUp },
+    { id: "customers", label: "Customers", icon: Users },
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
 
@@ -586,6 +561,7 @@ export default function App() {
               )}
               {dashboardScreen === "settings" && <SettingsScreen driverId={driverId} />}
               {dashboardScreen === "earnings" && <EarningsScreen driverId={driverId} />}
+              {dashboardScreen === "customers" && <CustomersScreen driverId={driverId} />}
             </div>
           </main>
         </div>

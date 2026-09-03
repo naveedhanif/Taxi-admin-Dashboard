@@ -2,6 +2,7 @@
   "rewrites": [
     { "source": "/bookings", "destination": "/index.html" },
     { "source": "/settings", "destination": "/index.html" },
-    { "source": "/earnings", "destination": "/index.html" }
+    { "source": "/earnings", "destination": "/index.html" },
+    { "source": "/customers", "destination": "/index.html" }
   ]
 }

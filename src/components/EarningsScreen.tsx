@@ -271,7 +271,7 @@ export default function EarningsScreen({ driverId }: { driverId: string | null }
   const rangeLabel = RANGE_OPTIONS.find((o) => o.value === range)?.label.toLowerCase() ?? "this period";
 
   return (
-    <div className="w-full max-w-2xl">
+    <div className="w-full">
       <div className="mb-6 px-1">
         <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
           Earnings
@@ -380,57 +380,63 @@ export default function EarningsScreen({ driverId }: { driverId: string | null }
             </div>
           </div>
 
-          {/* Daily chart */}
-          {showDailyChart && dayBuckets.length > 0 && (
-            <div className="mb-4 rounded-xl border border-[#E4E2DA] bg-white p-4">
-              <div className="mb-3 text-xs font-semibold text-[#5F5E5A]">Daily earnings</div>
-              <div className="flex items-end gap-2" style={{ height: 130 }}>
-                {dayBuckets.map((d, i) => (
-                  <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
-                    <div className="text-[9px] font-semibold text-[#5F5E5A]">{d.amount > 0 ? `€${d.amount.toFixed(0)}` : ""}</div>
-                    <div
-                      className="w-full max-w-[30px] rounded-t-md"
-                      style={{
-                        height: `${Math.max((d.amount / maxDayAmount) * 90, d.amount > 0 ? 4 : 1)}%`,
-                        background: d.isToday ? "linear-gradient(180deg, #63C77A, #3B8A4C)" : "linear-gradient(180deg, #378ADD, #185FA5)",
-                      }}
-                    />
-                    <div className="text-[9px] font-semibold text-[#8C8977]">{d.label}</div>
+          {/* Daily chart + Top customers — side by side on wider
+              screens now that the page uses the full content width,
+              rather than each stretching edge-to-edge on its own and
+              leaving a chart with only 7 thin bars looking sparse. */}
+          {(showDailyChart && dayBuckets.length > 0) || topCustomers.length > 0 ? (
+            <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {showDailyChart && dayBuckets.length > 0 && (
+                <div className="rounded-xl border border-[#E4E2DA] bg-white p-4">
+                  <div className="mb-3 text-xs font-semibold text-[#5F5E5A]">Daily earnings</div>
+                  <div className="flex items-end gap-2" style={{ height: 160 }}>
+                    {dayBuckets.map((d, i) => (
+                      <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+                        <div className="text-[9px] font-semibold text-[#5F5E5A]">{d.amount > 0 ? `€${d.amount.toFixed(0)}` : ""}</div>
+                        <div
+                          className="w-full max-w-[36px] rounded-t-md"
+                          style={{
+                            height: `${Math.max((d.amount / maxDayAmount) * 90, d.amount > 0 ? 4 : 1)}%`,
+                            background: d.isToday ? "linear-gradient(180deg, #63C77A, #3B8A4C)" : "linear-gradient(180deg, #378ADD, #185FA5)",
+                          }}
+                        />
+                        <div className="text-[9px] font-semibold text-[#8C8977]">{d.label}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* Top customers */}
-          {topCustomers.length > 0 && (
-            <div className="mb-4 rounded-xl border border-[#E4E2DA] bg-white p-4">
-              <div className="mb-3 text-xs font-semibold text-[#5F5E5A]">Top customers this period</div>
-              <div className="space-y-0.5">
-                {topCustomers.map((c, i) => (
-                  <div key={i} className="flex items-center gap-3 border-b border-[#F0EEE7] py-2 last:border-0">
-                    <div className="w-4 text-center text-[11px] font-bold text-[#8C8977]">{i + 1}</div>
-                    <div
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                      style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)", fontFamily: "'Space Grotesk'" }}
-                    >
-                      {initials(c.name)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold text-[#2C2C2A]">{c.name}</div>
-                      <div className="text-[11px] text-[#8C8977]">{c.trips} {c.trips === 1 ? "trip" : "trips"}</div>
-                    </div>
-                    <div className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-[#F0EEE7] sm:block">
-                      <div className="h-full rounded-full" style={{ width: `${(c.amount / maxCustomerAmount) * 100}%`, background: "linear-gradient(90deg, #378ADD, #185FA5)" }} />
-                    </div>
-                    <div className="w-16 shrink-0 text-right text-[13px] font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-                      €{c.amount.toFixed(0)}
-                    </div>
+              {topCustomers.length > 0 && (
+                <div className="rounded-xl border border-[#E4E2DA] bg-white p-4">
+                  <div className="mb-3 text-xs font-semibold text-[#5F5E5A]">Top customers this period</div>
+                  <div className="space-y-0.5">
+                    {topCustomers.map((c, i) => (
+                      <div key={i} className="flex items-center gap-3 border-b border-[#F0EEE7] py-2 last:border-0">
+                        <div className="w-4 text-center text-[11px] font-bold text-[#8C8977]">{i + 1}</div>
+                        <div
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)", fontFamily: "'Space Grotesk'" }}
+                        >
+                          {initials(c.name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13px] font-semibold text-[#2C2C2A]">{c.name}</div>
+                          <div className="text-[11px] text-[#8C8977]">{c.trips} {c.trips === 1 ? "trip" : "trips"}</div>
+                        </div>
+                        <div className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-[#F0EEE7] sm:block">
+                          <div className="h-full rounded-full" style={{ width: `${(c.amount / maxCustomerAmount) * 100}%`, background: "linear-gradient(90deg, #378ADD, #185FA5)" }} />
+                        </div>
+                        <div className="w-16 shrink-0 text-right text-[13px] font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+                          €{c.amount.toFixed(0)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
 
           <div className="mb-6 flex flex-wrap gap-2.5">
             <button
