@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Loader2, AlertCircle, Tag, Plus, Trash2, Copy, Check, X } from "lucide-react";
+import { Users, Loader2, AlertCircle, Tag, Plus, Trash2, Copy, Check, X, Gift } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 function useGoogleFont() {
@@ -264,6 +264,44 @@ export default function CustomersScreen({ driverId }: { driverId: string | null 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [promos, setPromos] = useState<Promo[]>([]);
   const [formTarget, setFormTarget] = useState<{ id: string; name: string } | null | "broadcast">(null);
+  const [referralPercent, setReferralPercent] = useState<number>(10);
+  const [referralInput, setReferralInput] = useState("10");
+  const [savingReferral, setSavingReferral] = useState(false);
+  const [referralSaved, setReferralSaved] = useState(false);
+
+  useEffect(() => {
+    if (!driverId) return;
+    loadAll();
+    supabase
+      .from("drivers")
+      .select("referral_reward_percent")
+      .eq("id", driverId)
+      .single()
+      .then(({ data }) => {
+        const pct = data?.referral_reward_percent ?? 10;
+        setReferralPercent(pct);
+        setReferralInput(String(pct));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverId]);
+
+  async function handleSaveReferralPercent() {
+    const pct = parseFloat(referralInput);
+    if (isNaN(pct) || pct <= 0 || pct > 100) {
+      setErrorMessage("Referral reward must be between 1 and 100");
+      return;
+    }
+    setSavingReferral(true);
+    const { error } = await supabase.from("drivers").update({ referral_reward_percent: pct }).eq("id", driverId);
+    setSavingReferral(false);
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+    setReferralPercent(pct);
+    setReferralSaved(true);
+    setTimeout(() => setReferralSaved(false), 1500);
+  }
 
   useEffect(() => {
     if (!driverId) return;
@@ -338,6 +376,37 @@ export default function CustomersScreen({ driverId }: { driverId: string | null 
           <AlertCircle size={14} /> {errorMessage}
         </div>
       )}
+
+      {/* Referral program */}
+      <div className="mb-6 rounded-xl p-4" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[#2C2C2A]">
+          <Gift size={13} className="text-[#185FA5]" /> Referral program
+        </div>
+        <p className="mb-3 text-[11px] text-[#8C8977]">
+          Every customer gets their own code to share. Their friend gets this much off their first ride; once that friend actually completes it, your customer automatically gets the same reward off their own next ride.
+        </p>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={referralInput}
+              onChange={(e) => setReferralInput(e.target.value)}
+              className="emboss-input w-24 rounded-lg px-3 py-2 pr-7 text-xs font-semibold text-[#2C2C2A]"
+            />
+            <span className="absolute right-3 top-2 text-xs text-[#8C8977]">%</span>
+          </div>
+          <button
+            onClick={handleSaveReferralPercent}
+            disabled={savingReferral || parseFloat(referralInput) === referralPercent}
+            className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {savingReferral ? <Loader2 size={12} className="animate-spin" /> : referralSaved ? <Check size={12} /> : null}
+            {referralSaved ? "Saved" : "Save"}
+          </button>
+        </div>
+      </div>
 
       {/* Promo codes section */}
       <div className="mb-6">
