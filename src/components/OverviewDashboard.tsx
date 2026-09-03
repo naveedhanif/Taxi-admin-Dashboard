@@ -172,12 +172,13 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
 
     const { data: driver } = await supabase
       .from("drivers")
-      .select("business_name, is_active")
+      .select("business_name, is_online, break_until")
       .eq("id", driverId)
       .single();
     if (driver) {
       setBusinessName(driver.business_name);
-      setOnline(driver.is_active);
+      setOnline(driver.is_online);
+      setBreakUntil(driver.break_until && new Date(driver.break_until) > new Date() ? driver.break_until : null);
     }
 
     const todayStart = startOfDay(new Date());
@@ -267,9 +268,39 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
     const newValue = !online;
     setOnline(newValue); // optimistic update
     if (driverId) {
-      await supabase.from("drivers").update({ is_active: newValue }).eq("id", driverId);
+      await supabase.from("drivers").update({ is_online: newValue }).eq("id", driverId);
     }
   }
+
+  // Break mode — a short, timed pause distinct from fully toggling
+  // Offline above (which needs a manual switch back). Setting
+  // break_until in the future hides the driver from new bookings
+  // (see _shared/driverAvailability.ts) without touching is_online at
+  // all, so App.tsx's header toggle and this one both keep correctly
+  // showing "Online" the whole time — only the availability CHECK
+  // additionally looks at break_until, nothing about the toggle state
+  // itself changes.
+  const [breakUntil, setBreakUntil] = useState<string | null>(null);
+  const [settingBreak, setSettingBreak] = useState(false);
+
+  async function handleTakeBreak(minutes: number) {
+    if (!driverId) return;
+    setSettingBreak(true);
+    const until = new Date(Date.now() + minutes * 60000).toISOString();
+    const { error } = await supabase.from("drivers").update({ break_until: until }).eq("id", driverId);
+    setSettingBreak(false);
+    if (!error) setBreakUntil(until);
+  }
+
+  async function handleEndBreak() {
+    if (!driverId) return;
+    setSettingBreak(true);
+    const { error } = await supabase.from("drivers").update({ break_until: null }).eq("id", driverId);
+    setSettingBreak(false);
+    if (!error) setBreakUntil(null);
+  }
+
+  const isOnBreak = online && breakUntil != null && new Date(breakUntil) > new Date();
 
   const ridesTodayCount = todayBookings.length;
   const earningsToday = todayBookings
@@ -331,20 +362,54 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
           </div>
           <div className="text-sm text-[#5F5E5A]">{todayLabel}</div>
         </div>
-        <button
-          onClick={handleToggleOnline}
-          disabled={isBusy}
-          className={`flex items-center gap-2 self-start rounded-full px-4 py-2 text-xs sm:text-sm font-medium cursor-pointer disabled:cursor-default ${
-            isBusy ? "emboss-toggle-on" : online ? "emboss-toggle-on" : "emboss-toggle-off"
-          }`}
-          style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
-        >
-          <Circle size={9} className="shrink-0" fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
-          <span className="sm:hidden">{isBusy ? "On a trip" : online ? "Online" : "Offline"}</span>
-          <span className="hidden sm:inline">
-            {isBusy ? "On a trip — hidden from new bookings" : online ? "Online — accepting bookings" : "Offline"}
-          </span>
-        </button>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <button
+            onClick={handleToggleOnline}
+            disabled={isBusy}
+            className={`flex items-center gap-2 self-start rounded-full px-4 py-2 text-xs sm:text-sm font-medium cursor-pointer disabled:cursor-default ${
+              isBusy ? "emboss-toggle-on" : online ? "emboss-toggle-on" : "emboss-toggle-off"
+            }`}
+            style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
+          >
+            <Circle size={9} className="shrink-0" fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
+            <span className="sm:hidden">{isBusy ? "On a trip" : online ? "Online" : "Offline"}</span>
+            <span className="hidden sm:inline">
+              {isBusy ? "On a trip — hidden from new bookings" : online ? "Online — accepting bookings" : "Offline"}
+            </span>
+          </button>
+
+          {/* Break mode — only offered while genuinely online and not
+              already mid-trip; a driver who's offline is already fully
+              hidden, and a break during an active trip doesn't mean
+              anything extra. */}
+          {online && !isBusy && (
+            isOnBreak ? (
+              <button
+                onClick={handleEndBreak}
+                disabled={settingBreak}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium disabled:opacity-60"
+                style={{ background: "#FAEEDA", color: "#633806" }}
+              >
+                <Circle size={7} fill="#BA7517" stroke="none" />
+                On break until {new Date(breakUntil!).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })} — tap to end
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-[#8C8977]">Quick break:</span>
+                {[15, 30, 60].map((minutes) => (
+                  <button
+                    key={minutes}
+                    onClick={() => handleTakeBreak(minutes)}
+                    disabled={settingBreak}
+                    className="emboss-btn rounded-full px-2.5 py-1 text-[11px] font-medium text-[#5F5E5A] disabled:opacity-60"
+                  >
+                    {minutes}m
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+        </div>
       </div>
 
       {/* Push notifications — reliable manual fallback for the silent
