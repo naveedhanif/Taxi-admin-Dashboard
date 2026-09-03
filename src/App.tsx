@@ -14,6 +14,7 @@ import EarningsScreen from "./components/EarningsScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
+import { enableDriverPush } from "./pushNotifications";
 import { supabase } from "./supabaseClient";
 import { getDriverForUser } from "./driverAuth";
 
@@ -177,6 +178,34 @@ export default function App() {
   }, []);
 
   const { notifications, dismiss, unviewedCount, audioRef } = useNewBookingNotifications(driverId);
+
+  // Auto-subscribes to real push notifications once a driver is known
+  // — no separate "enable" button needed, since useNewBookingNotifications
+  // above already triggers the native permission prompt (for the
+  // Badging API). If the driver already answered that, this just
+  // silently completes the subscription; if they denied it, or the
+  // browser doesn't support push, this quietly no-ops — every other
+  // feature in the app is unaffected either way. Runs once per driverId
+  // becoming available (e.g. on login), not on every render.
+  const pushSubscribedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!driverId) return;
+    if (pushSubscribedForRef.current === driverId) return;
+    pushSubscribedForRef.current = driverId;
+
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) return;
+      const result = await enableDriverPush(driverId, accessToken);
+      if (!result.enabled) {
+        // Expected in plenty of normal cases (permission not yet
+        // granted, unsupported browser) — not worth surfacing as an
+        // error anywhere, just don't get push this session.
+        console.info("Push notifications not enabled:", result.error);
+      }
+    })();
+  }, [driverId]);
 
   // Unlocks audio playback for mobile browsers. Most mobile browsers
   // (iOS Safari in particular) block .play() calls that don't trace

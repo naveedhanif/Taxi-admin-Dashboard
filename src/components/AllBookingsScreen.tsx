@@ -6,6 +6,7 @@ import { formatPhoneForLinks } from "../phoneLinks";
 
 export interface Booking {
   id: string;
+  customer_id: string | null;
   passenger_name: string;
   passenger_phone: string;
   pickup_address: string;
@@ -320,7 +321,7 @@ export default function AllBookingsScreen({
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at")
+        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at")
         .eq("driver_id", driverId)
         // Exclude bookings the passenger hasn't actually paid for yet —
         // a booking sits in "awaiting_payment" between PaymentIntent
@@ -460,6 +461,25 @@ export default function AllBookingsScreen({
     );
     if (selectedBooking && selectedBooking.id === id) {
       setSelectedBooking((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
+
+    // Real push to the passenger for the stages that matter to them —
+    // fire-and-forget, never blocks or fails this status update if it
+    // errors. driverId comes from this component's own props.
+    if (driverId) {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      supabase.auth.getSession().then(({ data: sessionData }) => {
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return;
+        fetch(`${supabaseUrl}/functions/v1/notify-status-push`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: anonKey },
+          body: JSON.stringify({ booking_id: id, driver_id: driverId }),
+        }).catch(() => {
+          // Non-fatal — the status update itself already succeeded above.
+        });
+      });
     }
   };
 
