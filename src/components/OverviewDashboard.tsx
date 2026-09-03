@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { MapPin, Plus, Settings, TrendingUp, Circle, Car } from "lucide-react";
+import { MapPin, Plus, Settings, TrendingUp, Circle, Car, Bell, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "../supabaseClient";
+import { enableDriverPush, isPushSupported } from "../pushNotifications";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -124,6 +125,40 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   const [activeTripCount, setActiveTripCount] = useState(0);
   const [weeklyEarnings, setWeeklyEarnings] = useState<{ day: string; amount: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  // The silent auto-subscribe attempt in App.tsx works reliably on
+  // mobile (iOS/Android allow requesting permission without a click),
+  // but several desktop browsers require a genuine user gesture to
+  // show the permission prompt at all — the same constraint already
+  // documented in useNewBookingNotifications.ts's own comments. This
+  // banner is the reliable fallback: a real click always works,
+  // everywhere. Only shown while permission is still undecided.
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(() =>
+    isPushSupported() ? Notification.permission : "unsupported"
+  );
+  const [enablingPush, setEnablingPush] = useState(false);
+  const [pushBannerDismissed, setPushBannerDismissed] = useState(false);
+  const [pushError, setPushError] = useState("");
+
+  async function handleEnablePush() {
+    if (!driverId) return;
+    setEnablingPush(true);
+    setPushError("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      setEnablingPush(false);
+      setPushError("Couldn't verify your session — try again.");
+      return;
+    }
+    const result = await enableDriverPush(driverId, accessToken);
+    setEnablingPush(false);
+    if (!result.enabled) {
+      setPushError(result.error === "denied" ? "Notifications are blocked for this site in your browser settings." : "Couldn't enable notifications — try again.");
+      setPushPermission(isPushSupported() ? Notification.permission : "unsupported");
+      return;
+    }
+    setPushPermission("granted");
+  }
 
   async function loadDashboardData() {
     if (!driverId) {
@@ -311,6 +346,46 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
           </span>
         </button>
       </div>
+
+      {/* Push notifications — reliable manual fallback for the silent
+          auto-attempt in App.tsx, since some desktop browsers won't
+          show a permission prompt without a real click. */}
+      {pushPermission === "default" && !pushBannerDismissed && (
+        <div
+          className="mb-4 sm:mb-6 flex items-center justify-between gap-3 rounded-xl p-3.5"
+          style={{ background: "#E6F1FB", border: "1px solid #C9DFF4" }}
+        >
+          <div className="flex items-center gap-2.5">
+            <Bell size={16} color="#185FA5" />
+            <div>
+              <div className="text-xs font-semibold text-[#0C447C]">Turn on notifications</div>
+              <div className="text-[11px] text-[#185FA5]">Get alerted about new bookings even when this tab isn't open.</div>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={handleEnablePush}
+              disabled={enablingPush}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              style={{ background: "#185FA5" }}
+            >
+              {enablingPush ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}
+              Enable
+            </button>
+            <button
+              onClick={() => setPushBannerDismissed(true)}
+              className="text-[11px] font-medium text-[#185FA5] underline"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
+      {pushError && (
+        <div className="mb-4 rounded-lg p-2.5 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+          {pushError}
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="mb-4 sm:mb-6 grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
