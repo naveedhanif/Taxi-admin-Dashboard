@@ -110,6 +110,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   useGoogleFont();
   const [businessName, setBusinessName] = useState("");
   const [online, setOnline] = useState(true);
+  const [licenceVerified, setLicenceVerified] = useState(true); // defaults true so nothing flashes a false "blocked" state before the real value loads
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
   const [upcomingLater, setUpcomingLater] = useState<Booking[]>([]);
   const [activeTripCount, setActiveTripCount] = useState(0);
@@ -154,10 +155,11 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
     }
     setLoading(true);
 
-    const { data: driver } = await supabase.from("drivers").select("business_name, is_online, break_until").eq("id", driverId).single();
+    const { data: driver } = await supabase.from("drivers").select("business_name, is_online, break_until, licence_verified").eq("id", driverId).single();
     if (driver) {
       setBusinessName(driver.business_name);
       setOnline(driver.is_online);
+      setLicenceVerified(driver.licence_verified === true);
       setBreakUntil(driver.break_until && new Date(driver.break_until) > new Date() ? driver.break_until : null);
     }
 
@@ -267,6 +269,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   }, [driverId]);
 
   async function handleToggleOnline() {
+    if (!licenceVerified) return; // guarded in the UI too, but never trust the click alone
     const newValue = !online;
     setOnline(newValue);
     if (driverId) await supabase.from("drivers").update({ is_online: newValue }).eq("id", driverId);
@@ -397,16 +400,28 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
           <div className="text-sm text-[#5F5E5A]">{todayLabel}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleToggleOnline}
-            disabled={isBusy}
-            className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-medium cursor-pointer disabled:cursor-default ${isBusy || online ? "emboss-toggle-on" : "emboss-toggle-off"}`}
-            style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
-          >
-            <Circle size={9} fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
-            {isBusy ? "On a trip" : online ? "Online" : "Offline"}
-          </button>
-          {online && !isBusy && (
+          {!licenceVerified ? (
+            <button
+              onClick={() => onNavigate?.("settings")}
+              className="flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-medium"
+              style={{ background: "#FAEEDA", color: "#633806" }}
+              title="Go to Settings → SPSV Licence"
+            >
+              <Circle size={9} fill="#BA7517" stroke="none" />
+              Licence pending verification — can't go online yet
+            </button>
+          ) : (
+            <button
+              onClick={handleToggleOnline}
+              disabled={isBusy}
+              className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-medium cursor-pointer disabled:cursor-default ${isBusy || online ? "emboss-toggle-on" : "emboss-toggle-off"}`}
+              style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
+            >
+              <Circle size={9} fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
+              {isBusy ? "On a trip" : online ? "Online" : "Offline"}
+            </button>
+          )}
+          {licenceVerified && online && !isBusy && (
             isOnBreak ? (
               <button onClick={handleEndBreak} disabled={settingBreak} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium disabled:opacity-60" style={{ background: "#FAEEDA", color: "#633806" }}>
                 <Circle size={7} fill="#BA7517" stroke="none" />

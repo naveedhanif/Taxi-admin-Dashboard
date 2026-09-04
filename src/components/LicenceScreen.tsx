@@ -121,6 +121,24 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
     }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+
+    // A genuinely new/changed number is worth an owner's attention —
+    // pushes every registered owner so this doesn't sit unseen. Never
+    // blocks or fails the save above if it errors; the licence number
+    // itself is already saved successfully by this point.
+    if (numberChanged && licenceNumber.trim()) {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      supabase.auth.getSession().then(({ data: sessionData }) => {
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return;
+        fetch(`${supabaseUrl}/functions/v1/notify-licence-submitted`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: anonKey },
+          body: JSON.stringify({ driver_id: driverId }),
+        }).catch(() => {});
+      });
+    }
   };
 
   const isVerified = savedData?.licence_verified ?? false;
@@ -161,9 +179,10 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
             </>
           ) : (
             <>
-              <strong>Not yet verified</strong> — enter your licence number below. Verification is done
-              manually against the NTA's public register, since it has no automated lookup available.
-              You'll be marked verified once that check is complete.
+              <strong>Not yet verified</strong> — you can't go online and accept bookings until this is
+              checked. Enter your licence number below; verification is done manually against the NTA's
+              public register, since it has no automated lookup available. You'll be notified the moment
+              it's reviewed.
             </>
           )}
         </div>
