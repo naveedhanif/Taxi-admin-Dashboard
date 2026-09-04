@@ -111,11 +111,53 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
 
     if (error) {
       setErrorMessage(error.message);
-    } else {
-      const loaded = (data ?? []) as FareRule[];
-      setRules(loaded);
-      setDiscountDrafts(Object.fromEntries(loaded.map((r) => [r.id, r.discount_percent])));
+      setLoading(false);
+      return;
     }
+
+    // Self-heal: a driver with genuinely zero rows almost certainly
+    // went through onboarding before this was fixed — the old
+    // onboarding step never actually saved anything. Rather than
+    // leaving them stuck on "contact support" forever, seed the real
+    // NTA rates automatically the moment they land on this screen,
+    // then reload. Idempotent on the server side, so this is safe even
+    // if it somehow runs more than once.
+    if ((data ?? []).length === 0) {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (accessToken) {
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/seed-fare-rules`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: anonKey },
+            body: JSON.stringify({ driver_id: driverId }),
+          });
+          if (res.ok) {
+            const { data: reloaded, error: reloadError } = await supabase
+              .from("fare_rules")
+              .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, tariff_a_cap, tariff_b_per_km_rate, tariff_b_per_minute_rate, discount_percent, is_active")
+              .eq("driver_id", driverId)
+              .order("tariff_period", { ascending: true });
+            if (!reloadError) {
+              const loaded = (reloaded ?? []) as FareRule[];
+              setRules(loaded);
+              setDiscountDrafts(Object.fromEntries(loaded.map((r) => [r.id, r.discount_percent])));
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // Falls through to showing the empty state below — a genuine
+          // "contact support" case only if the auto-fix itself fails.
+        }
+      }
+    }
+
+    const loaded = (data ?? []) as FareRule[];
+    setRules(loaded);
+    setDiscountDrafts(Object.fromEntries(loaded.map((r) => [r.id, r.discount_percent])));
     setLoading(false);
   }
 

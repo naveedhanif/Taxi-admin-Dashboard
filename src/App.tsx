@@ -5,6 +5,7 @@ import StripeConnectStep from "./components/StripeConnectStep";
 import SubscriptionPlanStep from "./components/SubscriptionPlanStep";
 import VehicleSetupStep from "./components/VehicleSetupStep";
 import FareRulesSetupStep from "./components/FareRulesSetupStep";
+import LicenceScreen from "./components/LicenceScreen";
 
 import OverviewDashboard from "./components/OverviewDashboard";
 import LoginScreen from "./components/LoginScreen";
@@ -462,8 +463,17 @@ export default function App() {
               />
             )}
             {onboardingStep === 5 && (
-              <FareRulesSetupStep
-                onComplete={() => {
+              <FareRulesSetupStep driverId={driverId} onComplete={() => setOnboardingStep(6)} />
+            )}
+            {onboardingStep === 6 && (
+              <LicenceScreen
+                driverId={driverId}
+                onboarding
+                onNext={() => {
+                  setViewMode("dashboard");
+                  setDashboardScreen("overview");
+                }}
+                onSkip={() => {
                   setViewMode("dashboard");
                   setDashboardScreen("overview");
                 }}
