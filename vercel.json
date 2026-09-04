@@ -3,6 +3,7 @@
     { "source": "/bookings", "destination": "/index.html" },
     { "source": "/settings", "destination": "/index.html" },
     { "source": "/earnings", "destination": "/index.html" },
-    { "source": "/customers", "destination": "/index.html" }
+    { "source": "/customers", "destination": "/index.html" },
+    { "source": "/profile", "destination": "/index.html" }
   ]
 }

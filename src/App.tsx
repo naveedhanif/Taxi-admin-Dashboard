@@ -13,6 +13,7 @@ import AllBookingsScreen from "./components/AllBookingsScreen";
 import SettingsScreen from "./components/SettingsScreen";
 import EarningsScreen from "./components/EarningsScreen";
 import CustomersScreen from "./components/CustomersScreen";
+import DriverProfileScreen from "./components/DriverProfileScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
@@ -31,18 +32,20 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Users,
+  User,
 } from "lucide-react";
 
-const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings", earnings: "/earnings", customers: "/customers" };
-function screenFromPath(pathname: string): "overview" | "bookings" | "settings" | "earnings" | "customers" {
+const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings", earnings: "/earnings", customers: "/customers", profile: "/profile" };
+function screenFromPath(pathname: string): "overview" | "bookings" | "settings" | "earnings" | "customers" | "profile" {
   if (pathname.startsWith("/bookings")) return "bookings";
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/earnings")) return "earnings";
   if (pathname.startsWith("/customers")) return "customers";
+  if (pathname.startsWith("/profile")) return "profile";
   return "overview";
 }
 
-function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" | "earnings" | "customers" {
+function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" | "earnings" | "customers" | "profile" {
   const pathScreen = screenFromPath(window.location.pathname);
   // Landing exactly on "/" is ambiguous: it's either a real, deliberate
   // navigation to Dashboard, OR — critically — it's iOS relaunching an
@@ -56,7 +59,7 @@ function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings
   if (window.location.pathname === "/") {
     try {
       const saved = localStorage.getItem("taxi_admin_dashboard_screen");
-      if (saved === "bookings" || saved === "settings" || saved === "earnings" || saved === "customers") return saved;
+      if (saved === "bookings" || saved === "settings" || saved === "earnings" || saved === "customers" || saved === "profile") return saved;
     } catch {
       // Ignore — storage unavailable, just use the path-derived default.
     }
@@ -69,7 +72,7 @@ export default function App() {
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
   // Two layers working together, not one or the other — see
   // initialDashboardScreen()'s comment for why URL alone wasn't enough.
-  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings" | "earnings" | "customers">(
+  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings" | "earnings" | "customers" | "profile">(
     initialDashboardScreen
   );
   // Mobile: drawer is closed by default, opened via hamburger.
@@ -96,7 +99,7 @@ export default function App() {
       window.history.pushState(null, "", targetPath);
       setCurrentPath(targetPath);
     }
-    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings" || dashboardScreen === "earnings" || dashboardScreen === "customers") {
+    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings" || dashboardScreen === "earnings" || dashboardScreen === "customers" || dashboardScreen === "profile") {
       try {
         localStorage.setItem("taxi_admin_dashboard_screen", dashboardScreen);
       } catch {
@@ -275,6 +278,7 @@ export default function App() {
 
   const navigationItems = [
     { id: "overview", label: "Dashboard", icon: LayoutDashboard },
+    { id: "profile", label: "Profile", icon: User },
     { id: "bookings", label: "Bookings", icon: Calendar },
     { id: "earnings", label: "Earnings", icon: TrendingUp },
     { id: "customers", label: "Customers", icon: Users },
@@ -572,40 +576,26 @@ export default function App() {
               {dashboardScreen === "settings" && <SettingsScreen driverId={driverId} />}
               {dashboardScreen === "earnings" && <EarningsScreen driverId={driverId} />}
               {dashboardScreen === "customers" && <CustomersScreen driverId={driverId} />}
+              {dashboardScreen === "profile" && <DriverProfileScreen driverId={driverId} onNavigate={selectScreen} />}
             </div>
           </main>
         </div>
       )}
 
-      {/* TEMPORARY diagnostic badge — remove once the screen-persistence
-          bug is confirmed fixed. Shows the raw path/state/localStorage
-          values so we can see exactly what's happening on a real device
-          instead of guessing from a screenshot after the fact. */}
-      <DebugBadge dashboardScreen={dashboardScreen} currentPath={currentPath} />
+      {/* DebugBadge removed — it was explicitly marked "temporary,
+          remove once the screen-persistence bug is confirmed fixed" and
+          never actually removed, so it's been showing raw internal
+          routing/localStorage state to every real driver in production.
+          The bug it was tracking is confirmed fixed by now (extensive
+          real-device testing since). */}
 
-      {/* Version badge — small, fixed, out of the way. Exists purely so
-          you can glance at the app and confirm which deployed commit
-          you're actually testing. Tap it to copy the full commit SHA
-          for bug reports tied to an exact build. See vite.config.ts for
-          how these values are injected. */}
-      <VersionBadge />
-    </div>
-  );
-}
-
-function DebugBadge({ dashboardScreen, currentPath }: { dashboardScreen: string; currentPath: string }) {
-  let stored = "?";
-  try {
-    stored = localStorage.getItem("taxi_admin_dashboard_screen") ?? "(empty)";
-  } catch {
-    stored = "(unavailable)";
-  }
-  return (
-    <div
-      className="fixed bottom-2 left-2 z-50 rounded-lg px-2 py-1 text-[10px] font-mono"
-      style={{ background: "#2C2C2A", color: "#F0EEE7" }}
-    >
-      path:{currentPath} state:{dashboardScreen} saved:{stored}
+      {/* Version badge — dev-only now. Useful for confirming which
+          commit you're testing locally, but a live driver has no
+          reason to see this, and the previous unconditional render
+          meant it (and the debug badge above) were both showing on
+          every real production device. See vite.config.ts for how
+          these values are injected. */}
+      {import.meta.env.DEV && <VersionBadge />}
     </div>
   );
 }
