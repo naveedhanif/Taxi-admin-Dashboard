@@ -118,7 +118,7 @@ export default function LoginScreen({ onLoginSuccess }: { onLoginSuccess?: (driv
             <Car size={28} color="#185FA5" />
           </div>
           <div className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
-            John's Taxi
+            Driver Dashboard
           </div>
           <div className="mt-1 text-sm text-[#5F5E5A]">Driver Dashboard Portal</div>
         </div>
@@ -131,7 +131,7 @@ export default function LoginScreen({ onLoginSuccess }: { onLoginSuccess?: (driv
                 <CheckCircle2 size={24} color="#27500A" />
               </div>
               <div className="text-lg font-semibold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-                {authMode === "magic_link" ? "Magic link sent!" : "Welcome back, John!"}
+                {authMode === "magic_link" ? "Magic link sent!" : "Welcome back!"}
               </div>
               <div className="mt-2 text-xs text-[#5F5E5A]">
                 {authMode === "magic_link"

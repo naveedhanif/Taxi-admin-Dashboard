@@ -108,8 +108,8 @@ interface BusinessDetailsStepProps {
 
 export default function BusinessDetailsStep({
   onNext,
-  initialBusinessName = "John's Taxi",
-  initialPhone = "+353 87 123 4567",
+  initialBusinessName = "",
+  initialPhone = "",
 }: BusinessDetailsStepProps) {
   useGoogleFont();
   const [businessName, setBusinessName] = useState(initialBusinessName);
