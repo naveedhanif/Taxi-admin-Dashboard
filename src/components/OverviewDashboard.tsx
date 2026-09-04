@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   MapPin, Plus, Circle, Car, Bell, Loader2, Phone, Navigation2,
-  ArrowUp, ArrowDown, PlayCircle, CheckCircle2, Clock,
+  ArrowUp, ArrowDown, PlayCircle, CheckCircle2, Clock, AlertTriangle,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "../supabaseClient";
@@ -110,6 +110,7 @@ function TrendBadge({ value, suffix, color }: { value: number | null; suffix: st
 export default function OverviewDashboard({ driverId, onNavigate }: { driverId: string | null; onNavigate?: (screen: string) => void }) {
   useGoogleFont();
   const [businessName, setBusinessName] = useState("");
+  const [hasVehicle, setHasVehicle] = useState(true); // defaults true so nothing flashes a false nudge before the real check loads
   const [online, setOnline] = useState(true);
   const [licenceVerified, setLicenceVerified] = useState(true); // defaults true so nothing flashes a false "blocked" state before the real value loads
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
@@ -163,6 +164,16 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
       setLicenceVerified(driver.licence_verified === true);
       setBreakUntil(driver.break_until && new Date(driver.break_until) > new Date() ? driver.break_until : null);
     }
+
+    // Passengers get a generic "couldn't load this driver" wall if
+    // this is missing — worth surfacing right here rather than the
+    // driver only finding out when a real passenger hits that error.
+    const { count: vehicleCount } = await supabase
+      .from("vehicles")
+      .select("id", { count: "exact", head: true })
+      .eq("driver_id", driverId)
+      .eq("is_active", true);
+    setHasVehicle((vehicleCount ?? 0) > 0);
 
     const todayStart = startOfDay(new Date());
     const todayEnd = new Date(todayStart);
@@ -465,6 +476,27 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
         </div>
       )}
       {pushError && <div className="mb-5 rounded-lg p-2.5 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>{pushError}</div>}
+
+      {!hasVehicle && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-xl p-3.5" style={{ background: "#FAEEDA", border: "1px solid #F0D9A8" }}>
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle size={16} color="#BA7517" />
+            <div>
+              <div className="text-xs font-semibold text-[#633806]">Add your vehicle to finish setup</div>
+              <div className="text-[11px] text-[#8C6A2A]">
+                Passengers can load your page but can't get a fare estimate or book with you until this is done — you skipped it during signup.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate?.("settings")}
+            className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+            style={{ background: "#BA7517" }}
+          >
+            Add vehicle
+          </button>
+        </div>
+      )}
 
       <div className="mb-5">
         <ShareLinkCard driverId={driverId} />
