@@ -6,6 +6,7 @@ import {
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "../supabaseClient";
 import { enableDriverPush, isPushSupported } from "../pushNotifications";
+import ShareLinkCard from "./ShareLinkCard";
 
 // MAJOR REDESIGN — "Live Dispatch Dashboard" layout, built from your
 // spec. Every number shown is real, computed from actual bookings —
@@ -464,6 +465,10 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
         </div>
       )}
       {pushError && <div className="mb-5 rounded-lg p-2.5 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>{pushError}</div>}
+
+      <div className="mb-5">
+        <ShareLinkCard driverId={driverId} />
+      </div>
 
       {/* Active Dispatch Center */}
       <div className="mb-5 rounded-2xl bg-white p-5 shadow-sm" style={{ border: "1px solid #ECE9E0" }}>
