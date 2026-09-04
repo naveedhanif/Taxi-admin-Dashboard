@@ -23,11 +23,12 @@ import { supabase } from "../supabaseClient";
 //     and (storage.foldername(name))[1] in (select id::text from drivers where user_id = auth.uid())
 //   );
 //
-// Also requires one column per usage — see the two call sites
+// Also requires one column per usage — see the call sites
 // (BusinessProfileScreen.tsx: drivers.photo_url, VehicleInfoScreen.tsx:
-// vehicles.photo_url):
+// vehicles.photo_url, LicenceScreen.tsx: drivers.licence_photo_url):
 //   ALTER TABLE drivers ADD COLUMN photo_url text;
 //   ALTER TABLE vehicles ADD COLUMN photo_url text;
+//   ALTER TABLE drivers ADD COLUMN licence_photo_url text;
 
 interface Props {
   driverId: string;
@@ -36,9 +37,14 @@ interface Props {
   currentUrl: string | null;
   onUploaded: (url: string) => void;
   label: string;
+  // Which column to write the uploaded URL into — defaults to
+  // photo_url so the two existing call sites (BusinessProfileScreen,
+  // VehicleInfoScreen) don't need any changes. licence_photo_url uses
+  // this to store into a different column on the same drivers table.
+  column?: string;
 }
 
-export default function PhotoUpload({ driverId, table, matchColumn, currentUrl, onUploaded, label }: Props) {
+export default function PhotoUpload({ driverId, table, matchColumn, currentUrl, onUploaded, label, column = "photo_url" }: Props) {
   const [uploading, setUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,7 +69,7 @@ export default function PhotoUpload({ driverId, table, matchColumn, currentUrl, 
     // policies above check against, so a driver can only ever write
     // into their own folder within the shared bucket.
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `${driverId}/${table}-${Date.now()}.${ext}`;
+    const path = `${driverId}/${table}-${column}-${Date.now()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage.from("driver-photos").upload(path, file, {
       cacheControl: "3600",
@@ -81,7 +87,7 @@ export default function PhotoUpload({ driverId, table, matchColumn, currentUrl, 
 
     const { error: updateError } = await supabase
       .from(table)
-      .update({ photo_url: publicUrl })
+      .update({ [column]: publicUrl })
       .eq(matchColumn, driverId);
 
     setUploading(false);

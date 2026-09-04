@@ -130,7 +130,7 @@ export default function StripeConnectStep({ onNext, onSkip }: StripeConnectStepP
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-1">
               <span className="rounded-full bg-[#EAF3DE] px-2.5 py-0.5 text-[11px] font-semibold text-[#27500A]">
-                Step 2 of 5
+                Step 2 of 6
               </span>
             </div>
             <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>

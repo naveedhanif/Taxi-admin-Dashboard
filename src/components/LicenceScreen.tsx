@@ -2,6 +2,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { ShieldCheck, ShieldAlert, Save, Loader2, AlertCircle, Check, ExternalLink } from "lucide-react";
 import { supabase } from "../supabaseClient";
+import PhotoUpload from "./PhotoUpload";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -49,11 +50,28 @@ interface LicenceData {
   spsv_licence_number: string | null;
   licence_verified: boolean;
   licence_verified_at: string | null;
+  licence_photo_url: string | null;
 }
 
-export default function LicenceScreen({ driverId }: { driverId: string | null }) {
+export default function LicenceScreen({
+  driverId,
+  onboarding = false,
+  onNext,
+  onSkip,
+}: {
+  driverId: string | null;
+  // When rendered as onboarding Step 6 rather than a normal Settings
+  // tab, adds a step badge and Continue/Skip buttons around the exact
+  // same save/photo logic below — no duplicated form, one real source
+  // of truth for how a licence gets submitted, whether that happens
+  // during signup or later in Settings.
+  onboarding?: boolean;
+  onNext?: () => void;
+  onSkip?: () => void;
+}) {
   useGoogleFont();
   const [licenceNumber, setLicenceNumber] = useState("");
+  const [licencePhotoUrl, setLicencePhotoUrl] = useState<string | null>(null);
   const [savedData, setSavedData] = useState<LicenceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,7 +88,7 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
       setLoading(true);
       const { data, error } = await supabase
         .from("drivers")
-        .select("spsv_licence_number, licence_verified, licence_verified_at")
+        .select("spsv_licence_number, licence_verified, licence_verified_at, licence_photo_url")
         .eq("id", driverId)
         .single();
       if (cancelled) return;
@@ -79,6 +97,7 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
       } else if (data) {
         setSavedData(data as LicenceData);
         setLicenceNumber(data.spsv_licence_number ?? "");
+        setLicencePhotoUrl(data.licence_photo_url ?? null);
       }
       setLoading(false);
     })();
@@ -90,6 +109,10 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!driverId) return;
+    if (!licencePhotoUrl) {
+      setErrorMessage("Please upload a photo of your licence card or disc before saving — it's what lets an owner actually verify this against the number, rather than just trusting text.");
+      return;
+    }
     setSaving(true);
     setErrorMessage("");
     setSaved(false);
@@ -144,14 +167,24 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
   const isVerified = savedData?.licence_verified ?? false;
 
   return (
-    <div className="min-h-[500px] w-full p-4 sm:p-6" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}>
+    <div
+      className={onboarding ? "flex min-h-[500px] w-full items-center justify-center p-4" : "min-h-[500px] w-full p-4 sm:p-6"}
+      style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter" }}
+    >
       <EmbossStyles />
-
+      <div className={onboarding ? "w-full max-w-lg" : ""}>
       <div className="mb-6">
+        {onboarding && (
+          <span className="mb-1 inline-block rounded-full bg-[#EAF3DE] px-2.5 py-0.5 text-[11px] font-semibold text-[#27500A]">
+            Step 6 of 6
+          </span>
+        )}
         <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
           SPSV licence
         </h1>
-        <p className="text-sm text-[#5F5E5A]">Your taxi licence number and verification status</p>
+        <p className="text-sm text-[#5F5E5A]">
+          {onboarding ? "You can't go online until this is verified — submit it now or finish it later in Settings." : "Your taxi licence number and verification status"}
+        </p>
       </div>
 
       {/* Status banner */}
@@ -194,6 +227,30 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="max-w-md space-y-4 text-xs">
+          <div className="rounded-xl border border-[#E4E2DA] p-4">
+            <PhotoUpload
+              driverId={driverId!}
+              table="drivers"
+              matchColumn="id"
+              column="licence_photo_url"
+              currentUrl={licencePhotoUrl}
+              label="Photo of your licence card or disc"
+              onUploaded={(url) => {
+                setLicencePhotoUrl(url);
+                // A new photo needs re-checking too, same reasoning as
+                // a changed number below — an owner approved whatever
+                // was there before, not this new image.
+                if (savedData?.licence_verified) {
+                  supabase.from("drivers").update({ licence_verified: false, licence_verified_at: null }).eq("id", driverId);
+                  setSavedData((prev) => (prev ? { ...prev, licence_verified: false, licence_verified_at: null } : prev));
+                }
+              }}
+            />
+            <p className="mt-2 text-[10px] text-[#8C8977]">
+              A clear photo of the actual card lets an owner check it against the number below, instead of just trusting typed text.
+            </p>
+          </div>
+
           <div>
             <label className="mb-1 block font-medium text-[#2C2C2A]">SPSV licence number</label>
             <input
@@ -233,8 +290,28 @@ export default function LicenceScreen({ driverId }: { driverId: string | null })
               Check the NTA public register <ExternalLink size={11} />
             </a>
           </div>
+
+          {onboarding && (
+            <div className="flex items-center gap-3 border-t border-[#ECE9E0] pt-4">
+              <button
+                type="button"
+                onClick={onNext}
+                className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer"
+              >
+                Continue to dashboard
+              </button>
+              <button
+                type="button"
+                onClick={onSkip}
+                className="text-xs font-medium text-[#8C8977] underline"
+              >
+                Skip for now — you can finish this in Settings later
+              </button>
+            </div>
+          )}
         </form>
       )}
+      </div>
     </div>
   );
 }
