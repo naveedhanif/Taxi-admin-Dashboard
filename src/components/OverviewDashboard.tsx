@@ -400,7 +400,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   const mapUrl = activeTrip ? staticMapUrl(activeTrip) : null;
 
   return (
-    <div className="min-h-[600px] w-full p-4 sm:p-6" style={{ backgroundColor: "#F8FAFC", fontFamily: "Inter" }}>
+    <div className="min-h-[600px] w-full overflow-x-hidden p-4 sm:p-6" style={{ backgroundColor: "#F8FAFC", fontFamily: "Inter" }}>
       <EmbossStyles />
 
       {/* Header */}

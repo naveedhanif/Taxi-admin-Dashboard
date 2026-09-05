@@ -81,27 +81,35 @@ export default function ShareLinkCard({ driverId }: { driverId: string | null })
   if (!bookingSlug) return null;
 
   return (
-    <div className="rounded-xl p-4 sm:p-5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+    <div className="w-full overflow-hidden rounded-xl p-4 sm:p-5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
         <QrCode size={15} className="text-[#185FA5]" /> Share your booking link
       </div>
-      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+      <div className="flex w-full flex-col items-center gap-4 sm:flex-row sm:items-start">
         {qrDataUrl && (
           <div className="shrink-0 rounded-xl bg-white p-2" style={{ border: "1px solid #ECE9E0" }}>
             <img src={qrDataUrl} alt="Booking QR code" width={120} height={120} />
           </div>
         )}
-        <div className="min-w-0 flex-1">
+        {/* w-full is the actual fix here — on mobile this container is
+            inside a flex-col with items-center, where a flex child
+            normally sizes to fit its own content rather than
+            stretching to the parent's width. Since the booking URL is
+            one long unbroken string, that meant this whole column grew
+            wide enough to fit it in one line, pushing past the screen
+            edge — min-w-0 alone doesn't fix that in a column layout,
+            it only affects flex-shrink behavior, not the base sizing. */}
+        <div className="w-full min-w-0 flex-1">
           <p className="mb-3 text-xs text-[#8C8977]">
             Customers scan this code, or use the link below, to book with you directly — no app download needed.
           </p>
-          <div className="mb-3 flex items-center gap-2 rounded-lg p-2.5" style={{ background: "#FFFFFF", border: "1px solid #E4E2DA" }}>
-            <span className="min-w-0 flex-1 truncate text-xs font-mono text-[#2C2C2A]">{bookingUrl}</span>
+          <div className="mb-3 flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg p-2.5" style={{ background: "#FFFFFF", border: "1px solid #E4E2DA" }}>
+            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-mono text-[#2C2C2A]">{bookingUrl}</span>
             <a href={bookingUrl!} target="_blank" rel="noreferrer" className="shrink-0 text-[#8C8977]">
               <ExternalLink size={13} />
             </a>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-wrap gap-2">
             <button onClick={handleShare} className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white">
               <Share2 size={12} /> Share
             </button>
