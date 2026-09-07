@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "../supabaseClient";
-import { enableDriverPush, isPushSupported } from "../pushNotifications";
+import { enableDriverPush, isPushSupported, isIosNonStandalone } from "../pushNotifications";
 import ShareLinkCard from "./ShareLinkCard";
 
 // MAJOR REDESIGN — "Live Dispatch Dashboard" layout, built from your
@@ -458,7 +458,21 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
         </div>
       </div>
 
-      {pushPermission === "default" && !pushBannerDismissed && (
+      {isIosNonStandalone() && !pushBannerDismissed && (
+        <div className="mb-5 rounded-xl p-3.5" style={{ background: "#E6F1FB", border: "1px solid #C9DFF4" }}>
+          <div className="mb-1.5 flex items-center gap-2.5">
+            <Bell size={16} color="#185FA5" />
+            <div className="text-xs font-semibold text-[#0C447C]">Get notifications on iPhone</div>
+          </div>
+          <p className="mb-2 text-[11px] text-[#185FA5]">
+            iPhone only allows notifications for apps added to your Home Screen — not for a regular Safari tab. Tap{" "}
+            <strong>Share</strong> (the square with an arrow) → <strong>Add to Home Screen</strong>, then open the app from
+            that new icon instead of Safari — this banner will change to a real "Enable" button once you do.
+          </p>
+          <button onClick={() => setPushBannerDismissed(true)} className="text-[11px] font-medium text-[#185FA5] underline">Not now</button>
+        </div>
+      )}
+      {!isIosNonStandalone() && pushPermission === "default" && !pushBannerDismissed && (
         <div className="mb-5 flex items-center justify-between gap-3 rounded-xl p-3.5" style={{ background: "#E6F1FB", border: "1px solid #C9DFF4" }}>
           <div className="flex items-center gap-2.5">
             <Bell size={16} color="#185FA5" />

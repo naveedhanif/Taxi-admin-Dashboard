@@ -22,6 +22,23 @@ export function isPushSupported(): boolean {
 }
 
 /**
+ * iOS (and iPadOS in mobile-Safari mode) doesn't expose PushManager at
+ * all outside a home-screen-installed standalone app — not a bug, a
+ * hard platform restriction from Apple, identical across every
+ * browser on iOS since they all share the same underlying engine.
+ * isPushSupported() already correctly returns false in this exact
+ * case, but "unsupported"/"try again" doesn't tell an iPhone driver
+ * the one thing that actually fixes it. This lets the UI show real
+ * guidance instead of a dead end.
+ */
+export function isIosNonStandalone(): boolean {
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true;
+  return isIos && !isStandalone;
+}
+
+/**
  * Silent-fails on purpose (returns without throwing) whenever push
  * genuinely isn't available or usable right now — permission denied,
  * VAPID key missing, browser unsupported. Called automatically once a
