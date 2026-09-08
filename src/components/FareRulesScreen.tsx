@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ShieldCheck, Loader2, AlertCircle, Percent, ExternalLink, Save, Check } from "lucide-react";
+import { ShieldCheck, Loader2, AlertCircle, Percent, ExternalLink, Save, Check, Wallet } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 export interface FareRule {
@@ -91,6 +91,62 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
   // Local edit buffer keyed by rule id, so typing doesn't save on every
   // keystroke — only on blur / explicit save.
   const [discountDrafts, setDiscountDrafts] = useState<Record<string, number>>({});
+
+  // Cash-payment deposit — a real driver-facing setting that never
+  // actually existed anywhere in the app before this. Lives on
+  // `drivers`, not `fare_rules`, so it's loaded/saved separately from
+  // the tariff rules above, on the same screen since it's still a
+  // payment-related setting a driver would look for here.
+  const [depositEnabled, setDepositEnabled] = useState(true);
+  const [depositAmountDraft, setDepositAmountDraft] = useState("5");
+  const [depositLoading, setDepositLoading] = useState(true);
+  const [depositSaving, setDepositSaving] = useState(false);
+  const [depositSaved, setDepositSaved] = useState(false);
+  const [depositError, setDepositError] = useState("");
+
+  useEffect(() => {
+    if (!driverId) {
+      setDepositLoading(false);
+      return;
+    }
+    supabase
+      .from("drivers")
+      .select("deposit_enabled, pay_later_deposit_amount")
+      .eq("id", driverId)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setDepositEnabled(data.deposit_enabled ?? true);
+          setDepositAmountDraft(String(data.pay_later_deposit_amount ?? 5));
+        }
+        setDepositLoading(false);
+      });
+  }, [driverId]);
+
+  async function saveDepositSettings(nextEnabled: boolean, nextAmount?: string) {
+    if (!driverId) return;
+    setDepositSaving(true);
+    setDepositError("");
+    const amountToSave = nextAmount !== undefined ? parseFloat(nextAmount) : parseFloat(depositAmountDraft);
+    if (nextEnabled && (isNaN(amountToSave) || amountToSave <= 0)) {
+      setDepositSaving(false);
+      setDepositError("Enter a deposit amount greater than €0, or turn the toggle off instead.");
+      return;
+    }
+    const { error } = await supabase
+      .from("drivers")
+      .update({ deposit_enabled: nextEnabled, pay_later_deposit_amount: nextEnabled ? amountToSave : Number(depositAmountDraft) || 5 })
+      .eq("id", driverId);
+    setDepositSaving(false);
+    if (error) {
+      setDepositError(error.message);
+      return;
+    }
+    setDepositEnabled(nextEnabled);
+    setDepositSaved(true);
+    setTimeout(() => setDepositSaved(false), 2000);
+  }
+
 
   useEffect(() => {
     if (!driverId) {
@@ -320,6 +376,80 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
           );
         })}
       </div>
+      )}
+
+      {/* Cash payment deposit — a real, new setting. Off means a
+          "pay later" (cash) booking charges the passenger nothing at
+          all up front; on means the existing deposit-on-booking
+          behavior, same as it's always worked. */}
+      {!depositLoading && (
+        <div className="mt-6 rounded-2xl p-5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
+            <Wallet size={15} className="text-[#185FA5]" /> Cash payment deposit
+          </div>
+          <p className="mb-4 text-xs text-[#8C8977]">
+            When a passenger chooses to pay you directly in cash, you can optionally charge a small deposit by
+            card up front — real protection against a no-show. Turn this off and a cash booking charges nothing
+            at all until the ride is complete.
+          </p>
+
+          <div className="mb-4 flex items-center justify-between rounded-xl p-3.5" style={{ background: depositEnabled ? "#EAF3DE" : "#F1EFE8" }}>
+            <div>
+              <div className="text-xs font-semibold" style={{ color: depositEnabled ? "#27500A" : "#5F5E5A" }}>
+                {depositEnabled ? "Deposit enabled" : "Deposit disabled"}
+              </div>
+              <div className="text-[11px]" style={{ color: depositEnabled ? "#27500A" : "#8C8977" }}>
+                {depositEnabled ? "Cash bookings charge a card deposit now." : "Cash bookings charge nothing up front."}
+              </div>
+            </div>
+            <button
+              onClick={() => saveDepositSettings(!depositEnabled)}
+              disabled={depositSaving}
+              role="switch"
+              aria-checked={depositEnabled}
+              className="relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60"
+              style={{ background: depositEnabled ? "#185FA5" : "#D8D5CB" }}
+            >
+              <span
+                className="absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform"
+                style={{ transform: depositEnabled ? "translateX(22px)" : "translateX(2px)" }}
+              />
+            </button>
+          </div>
+
+          {depositEnabled && (
+            <div className="flex items-end gap-2.5">
+              <div className="flex-1">
+                <label className="mb-1 block text-[11px] font-medium text-[#5F5E5A]">Deposit amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-xs text-[#8C8977]">€</span>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={depositAmountDraft}
+                    onChange={(e) => setDepositAmountDraft(e.target.value)}
+                    className="emboss-input w-full rounded-lg px-3 py-2 pl-6 text-xs font-semibold text-[#2C2C2A]"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => saveDepositSettings(true, depositAmountDraft)}
+                disabled={depositSaving}
+                className="emboss-btn-primary flex h-[34px] items-center gap-1.5 rounded-lg px-4 text-xs font-semibold text-white disabled:opacity-40"
+              >
+                {depositSaving ? <Loader2 size={13} className="animate-spin" /> : depositSaved ? <Check size={13} /> : <Save size={13} />}
+                {depositSaving ? "Saving…" : depositSaved ? "Saved" : "Save"}
+              </button>
+            </div>
+          )}
+
+          {depositError && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+              <AlertCircle size={12} /> {depositError}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
