@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import ChatPanel from "./ChatPanel";
 import { formatPhoneForLinks } from "../phoneLinks";
@@ -23,6 +23,10 @@ export interface Booking {
   balance_due: number | null;
   balance_collected: boolean;
   driver_viewed_at: string | null;
+  flight_number: string | null;
+  flight_status: string | null;
+  flight_scheduled_arrival: string | null;
+  flight_revised_arrival: string | null;
 }
 
 function useGoogleFont() {
@@ -321,7 +325,7 @@ export default function AllBookingsScreen({
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at")
+        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival")
         .eq("driver_id", driverId)
         // Exclude bookings the passenger hasn't actually paid for yet —
         // a booking sits in "awaiting_payment" between PaymentIntent
@@ -840,6 +844,27 @@ export default function AllBookingsScreen({
                   </div>
                 </div>
               </div>
+
+              {selectedBooking.flight_number && (
+                <div className="rounded-lg p-3" style={{ background: "#E6F1FB", border: "1px solid #C9DFF4" }}>
+                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase text-[#0C447C]">
+                    <Plane size={12} /> Flight {selectedBooking.flight_number}
+                  </div>
+                  {selectedBooking.flight_status ? (
+                    <>
+                      <div className="text-xs font-semibold text-[#0C447C]">{selectedBooking.flight_status}</div>
+                      {selectedBooking.flight_revised_arrival && selectedBooking.flight_scheduled_arrival && selectedBooking.flight_revised_arrival !== selectedBooking.flight_scheduled_arrival && (
+                        <div className="mt-1 text-[11px] text-[#633806]">
+                          Revised arrival: {new Date(selectedBooking.flight_revised_arrival).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                          {" "}— pickup time adjusted to match automatically.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-[#185FA5]">Will be checked closer to pickup time.</div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-between items-center rounded-lg border border-[#E4E2DA] p-3">
                 <div className="flex items-center gap-2">
