@@ -407,12 +407,33 @@ export default function FareRulesScreen({ driverId }: { driverId: string | null 
               disabled={depositSaving}
               role="switch"
               aria-checked={depositEnabled}
-              className="relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60"
-              style={{ background: depositEnabled ? "#185FA5" : "#D8D5CB" }}
+              style={{
+                position: "relative",
+                height: 28,
+                width: 48,
+                minWidth: 48,
+                flexShrink: 0,
+                borderRadius: 999,
+                background: depositEnabled ? "#185FA5" : "#D8D5CB",
+                border: "none",
+                padding: 0,
+                cursor: depositSaving ? "default" : "pointer",
+                opacity: depositSaving ? 0.6 : 1,
+                transition: "background 0.2s ease",
+              }}
             >
               <span
-                className="absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform"
-                style={{ transform: depositEnabled ? "translateX(22px)" : "translateX(2px)" }}
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  left: depositEnabled ? 22 : 2,
+                  height: 24,
+                  width: 24,
+                  borderRadius: "50%",
+                  background: "white",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                  transition: "left 0.2s ease",
+                }}
               />
             </button>
           </div>
