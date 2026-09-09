@@ -124,18 +124,25 @@ export default function ShareLinkCard({ driverId }: { driverId: string | null })
               <ExternalLink size={13} />
             </a>
           </div>
-          <div className="flex w-full flex-wrap gap-2">
-            <button onClick={handleShare} className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white">
-              <Share2 size={12} /> Share
+          <div className="flex w-full flex-col gap-2.5">
+            <button
+              onClick={handleShare}
+              className="emboss-btn-primary flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
+            >
+              <Share2 size={15} /> Share Booking Link
             </button>
-            <button onClick={handleCopy} className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-[#5F5E5A]">
-              {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? "Copied" : "Copy link"}
-            </button>
-            {qrDataUrl && (
-              <button onClick={handleDownloadQr} className="emboss-btn flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-[#5F5E5A]">
-                <Download size={12} /> Download QR
+            <div className="grid grid-cols-2 gap-2.5">
+              <button onClick={handleCopy} className="emboss-btn flex items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-semibold text-[#5F5E5A]">
+                {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy link"}
               </button>
-            )}
+              {qrDataUrl ? (
+                <button onClick={handleDownloadQr} className="emboss-btn flex items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-semibold text-[#5F5E5A]">
+                  <Download size={13} /> Save QR
+                </button>
+              ) : (
+                <div />
+              )}
+            </div>
           </div>
         </div>
       </div>
