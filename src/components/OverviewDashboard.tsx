@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   MapPin, Plus, Circle, Car, Bell, Loader2, Phone, Navigation2,
-  ArrowUp, ArrowDown, PlayCircle, CheckCircle2, Clock, AlertTriangle,
+  ArrowUp, ArrowDown, PlayCircle, CheckCircle2, Clock, AlertTriangle, Star,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "../supabaseClient";
@@ -111,6 +111,8 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   useGoogleFont();
   const [businessName, setBusinessName] = useState("");
   const [hasVehicle, setHasVehicle] = useState(true); // defaults true so nothing flashes a false nudge before the real check loads
+  const [vehicleLabel, setVehicleLabel] = useState("");
+  const [avgRating, setAvgRating] = useState<number | null>(null);
   const [online, setOnline] = useState(true);
   const [licenceVerified, setLicenceVerified] = useState(true); // defaults true so nothing flashes a false "blocked" state before the real value loads
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
@@ -157,23 +159,27 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
     }
     setLoading(true);
 
-    const { data: driver } = await supabase.from("drivers").select("business_name, is_online, break_until, licence_verified").eq("id", driverId).single();
+    const { data: driver } = await supabase.from("drivers").select("business_name, is_online, break_until, licence_verified, avg_rating").eq("id", driverId).single();
     if (driver) {
       setBusinessName(driver.business_name);
       setOnline(driver.is_online);
       setLicenceVerified(driver.licence_verified === true);
       setBreakUntil(driver.break_until && new Date(driver.break_until) > new Date() ? driver.break_until : null);
+      setAvgRating(driver.avg_rating != null ? Number(driver.avg_rating) : null);
     }
 
     // Passengers get a generic "couldn't load this driver" wall if
     // this is missing — worth surfacing right here rather than the
     // driver only finding out when a real passenger hits that error.
-    const { count: vehicleCount } = await supabase
+    // Also grabs make/model here for the header — one query, not two.
+    const { data: vehicleRows, count: vehicleCount } = await supabase
       .from("vehicles")
-      .select("id", { count: "exact", head: true })
+      .select("make, model", { count: "exact" })
       .eq("driver_id", driverId)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .limit(1);
     setHasVehicle((vehicleCount ?? 0) > 0);
+    setVehicleLabel(vehicleRows && vehicleRows[0] ? `${vehicleRows[0].make} ${vehicleRows[0].model}` : "");
 
     const todayStart = startOfDay(new Date());
     const todayEnd = new Date(todayStart);
@@ -403,59 +409,86 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
     <div className="min-h-[600px] w-full overflow-x-hidden p-4 sm:p-6" style={{ backgroundColor: "#F8FAFC", fontFamily: "Inter" }}>
       <EmbossStyles />
 
-      {/* Header */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header — avatar, name, real vehicle label if one's on file */}
+      <div className="mb-4 flex items-center gap-3">
+        <div
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+        >
+          <Car size={19} color="white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-bold text-[#2C2C2A]">{businessName || "Driver"}</div>
+          {vehicleLabel && <div className="truncate text-xs text-[#8C8977]">{vehicleLabel}</div>}
+        </div>
+        {!licenceVerified ? (
+          <button
+            onClick={() => onNavigate?.("settings")}
+            className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+            style={{ background: "#FAEEDA", color: "#633806" }}
+            title="Go to Settings → SPSV Licence"
+          >
+            <Circle size={8} fill="#BA7517" stroke="none" /> Pending
+          </button>
+        ) : (
+          <button
+            onClick={handleToggleOnline}
+            disabled={isBusy}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium cursor-pointer disabled:cursor-default ${isBusy || online ? "emboss-toggle-on" : "emboss-toggle-off"}`}
+            style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
+          >
+            <Circle size={8} fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
+            {isBusy ? "On a trip" : online ? "Online" : "Offline"}
+          </button>
+        )}
+      </div>
+
+      {!licenceVerified && (
+        <div className="mb-4 rounded-xl p-3" style={{ background: "#FAEEDA" }}>
+          <span className="text-xs font-medium text-[#633806]">Licence pending verification — you can't go online until it's approved.</span>
+        </div>
+      )}
+
+      {/* Greeting + rating */}
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
             Hi, {businessName || "there"}
           </div>
           <div className="text-sm text-[#5F5E5A]">{todayLabel}</div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!licenceVerified ? (
-            <button
-              onClick={() => onNavigate?.("settings")}
-              className="flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-medium"
-              style={{ background: "#FAEEDA", color: "#633806" }}
-              title="Go to Settings → SPSV Licence"
-            >
-              <Circle size={9} fill="#BA7517" stroke="none" />
-              Licence pending verification — can't go online yet
+        {avgRating != null && (
+          <div className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5" style={{ background: "#FAEEDA" }}>
+            <Star size={13} fill="#BA7517" color="#BA7517" />
+            <span className="text-sm font-bold text-[#633806]">{avgRating.toFixed(2)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Status + quick actions */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {licenceVerified && online && !isBusy && (
+          isOnBreak ? (
+            <button onClick={handleEndBreak} disabled={settingBreak} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium disabled:opacity-60" style={{ background: "#FAEEDA", color: "#633806" }}>
+              <Circle size={7} fill="#BA7517" stroke="none" />
+              Break until {new Date(breakUntil!).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
             </button>
           ) : (
-            <button
-              onClick={handleToggleOnline}
-              disabled={isBusy}
-              className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-medium cursor-pointer disabled:cursor-default ${isBusy || online ? "emboss-toggle-on" : "emboss-toggle-off"}`}
-              style={{ color: isBusy ? "#185FA5" : online ? "#3B6D11" : "#5F5E5A" }}
-            >
-              <Circle size={9} fill={isBusy ? "#185FA5" : online ? "#639922" : "#B4B2A9"} stroke="none" />
-              {isBusy ? "On a trip" : online ? "Online" : "Offline"}
-            </button>
-          )}
-          {licenceVerified && online && !isBusy && (
-            isOnBreak ? (
-              <button onClick={handleEndBreak} disabled={settingBreak} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium disabled:opacity-60" style={{ background: "#FAEEDA", color: "#633806" }}>
-                <Circle size={7} fill="#BA7517" stroke="none" />
-                Break until {new Date(breakUntil!).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                {[15, 30, 60].map((m) => (
-                  <button key={m} onClick={() => handleTakeBreak(m)} disabled={settingBreak} className="emboss-btn rounded-full px-2.5 py-1 text-[11px] font-medium text-[#5F5E5A] disabled:opacity-60">
-                    {m}m break
-                  </button>
-                ))}
-              </div>
-            )
-          )}
-          <button
-            onClick={() => onNavigate?.("bookings")}
-            className="emboss-btn-primary flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white cursor-pointer"
-          >
-            <Plus size={15} /> Add booking
-          </button>
-        </div>
+            <div className="flex items-center gap-1.5">
+              {[15, 30, 60].map((m) => (
+                <button key={m} onClick={() => handleTakeBreak(m)} disabled={settingBreak} className="emboss-btn rounded-full px-2.5 py-1 text-[11px] font-medium text-[#5F5E5A] disabled:opacity-60">
+                  {m}m break
+                </button>
+              ))}
+            </div>
+          )
+        )}
+        <button
+          onClick={() => onNavigate?.("bookings")}
+          className="emboss-btn-primary flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-sm font-semibold text-white cursor-pointer sm:flex-initial"
+        >
+          <Plus size={15} /> Add booking
+        </button>
       </div>
 
       {isIosNonStandalone() && !pushBannerDismissed && (
@@ -592,21 +625,24 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
         )}
       </div>
 
-      {/* KPIs */}
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl bg-white p-5 shadow-sm" style={{ border: "1px solid #ECE9E0" }}>
-          <div className="mb-1 text-xs font-medium text-[#5F5E5A]">Today's Earnings</div>
-          <div className="mb-1.5 text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>€{earningsToday.toFixed(2)}</div>
-          <TrendBadge value={earningsDelta} suffix="% vs yesterday" color="green" />
+      {/* Today's stats — one compact row, matching the reference's
+          layout, same real numbers as before (today's earnings, rides
+          completed, total miles) just presented more densely rather
+          than as three separate large cards. */}
+      <div className="mb-5 grid grid-cols-3 divide-x rounded-2xl bg-white py-4 shadow-sm" style={{ border: "1px solid #ECE9E0", borderColor: "#ECE9E0" }}>
+        <div className="px-2 text-center sm:px-4">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#8C8977]">Rides today</div>
+          <div className="text-lg font-bold text-[#2C2C2A] sm:text-xl" style={{ fontFamily: "'Space Grotesk'" }}>{ridesTodayCount}</div>
+          <TrendBadge value={ridesDelta} suffix=" vs last wk" color="blue" />
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-sm" style={{ border: "1px solid #ECE9E0" }}>
-          <div className="mb-1 text-xs font-medium text-[#5F5E5A]">Rides Completed</div>
-          <div className="mb-1.5 text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>{ridesTodayCount}</div>
-          <TrendBadge value={ridesDelta} suffix=" trips vs last week" color="blue" />
+        <div className="px-2 text-center sm:px-4">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#8C8977]">Earnings today</div>
+          <div className="text-lg font-bold text-[#2C2C2A] sm:text-xl" style={{ fontFamily: "'Space Grotesk'" }}>€{earningsToday.toFixed(2)}</div>
+          <TrendBadge value={earningsDelta} suffix="% vs yday" color="green" />
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-sm" style={{ border: "1px solid #ECE9E0" }}>
-          <div className="mb-1 text-xs font-medium text-[#5F5E5A]">Total Miles Today</div>
-          <div className="text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>{milesToday.toFixed(1)} mi</div>
+        <div className="px-2 text-center sm:px-4">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#8C8977]">Miles today</div>
+          <div className="text-lg font-bold text-[#2C2C2A] sm:text-xl" style={{ fontFamily: "'Space Grotesk'" }}>{milesToday.toFixed(1)}</div>
         </div>
       </div>
 

@@ -33,6 +33,8 @@ import {
   PanelLeftOpen,
   Users,
   User,
+  Home,
+  Plus,
 } from "lucide-react";
 
 const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings", earnings: "/earnings", customers: "/customers", profile: "/profile" };
@@ -558,7 +560,7 @@ export default function App() {
             </>
           )}
 
-          <main className="min-w-0 flex-1 py-4 sm:py-6">
+          <main className="min-w-0 flex-1 py-4 pb-24 sm:py-6 sm:pb-6">
             <div className="px-3 sm:px-6">
               {dashboardScreen === "overview" && <OverviewDashboard driverId={driverId} onNavigate={(s) => setDashboardScreen(s as any)} />}
               {dashboardScreen === "login" && (
@@ -581,6 +583,70 @@ export default function App() {
           </main>
         </div>
       )}
+
+      {/* Mobile bottom nav — desktop keeps the existing sidebar
+          unchanged; this is purely additive for small screens. Real
+          data only: unviewedCount is the same already-tracked value
+          the sidebar's own badge uses, not a new invented counter. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
+        style={{ background: "white", borderColor: "#ECE9E0", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+      >
+        {[
+          { id: "overview", label: "Home", icon: Home },
+          { id: "bookings", label: "Bookings", icon: Calendar, badge: unviewedCount },
+        ].map((item) => {
+          const Icon = item.icon;
+          const isActive = dashboardScreen === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => selectScreen(item.id)}
+              className="relative flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-medium"
+              style={{ color: isActive ? "#185FA5" : "#8C8977" }}
+            >
+              <Icon size={20} />
+              {item.label}
+              {item.badge != null && item.badge > 0 && (
+                <span
+                  className="absolute right-1/2 top-0 flex h-4 min-w-[16px] translate-x-3 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+                  style={{ background: "#185FA5" }}
+                >
+                  {item.badge > 9 ? "9+" : item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        <button
+          onClick={() => selectScreen("bookings")}
+          className="mx-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white"
+          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)", boxShadow: "3px 3px 10px rgba(4,44,83,0.35)" }}
+          aria-label="Add booking"
+        >
+          <Plus size={22} />
+        </button>
+
+        {[
+          { id: "earnings", label: "Earnings", icon: TrendingUp },
+          { id: "settings", label: "Settings", icon: SettingsIcon },
+        ].map((item) => {
+          const Icon = item.icon;
+          const isActive = dashboardScreen === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => selectScreen(item.id)}
+              className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-medium"
+              style={{ color: isActive ? "#185FA5" : "#8C8977" }}
+            >
+              <Icon size={20} />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
 
       {/* DebugBadge removed — it was explicitly marked "temporary,
           remove once the screen-persistence bug is confirmed fixed" and

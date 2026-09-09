@@ -87,8 +87,23 @@ export default function ShareLinkCard({ driverId }: { driverId: string | null })
       </div>
       <div className="flex w-full flex-col items-center gap-4 sm:flex-row sm:items-start">
         {qrDataUrl && (
-          <div className="shrink-0 rounded-xl bg-white p-2" style={{ border: "1px solid #ECE9E0" }}>
+          <div className="relative shrink-0 p-3" style={{ background: "white", border: "1px solid #ECE9E0", borderRadius: 14 }}>
+            {/* Corner brackets — purely decorative framing, real QR image underneath */}
+            {[
+              { top: -1, left: -1, borderTop: "3px solid #185FA5", borderLeft: "3px solid #185FA5", borderTopLeftRadius: 10 },
+              { top: -1, right: -1, borderTop: "3px solid #185FA5", borderRight: "3px solid #185FA5", borderTopRightRadius: 10 },
+              { bottom: -1, left: -1, borderBottom: "3px solid #185FA5", borderLeft: "3px solid #185FA5", borderBottomLeftRadius: 10 },
+              { bottom: -1, right: -1, borderBottom: "3px solid #185FA5", borderRight: "3px solid #185FA5", borderBottomRightRadius: 10 },
+            ].map((pos, i) => (
+              <span key={i} className="pointer-events-none absolute h-4 w-4" style={pos} />
+            ))}
             <img src={qrDataUrl} alt="Booking QR code" width={120} height={120} />
+            <div
+              className="absolute left-1/2 top-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white"
+              style={{ background: "#185FA5", border: "3px solid white" }}
+            >
+              <Check size={13} />
+            </div>
           </div>
         )}
         {/* w-full is the actual fix here — on mobile this container is
