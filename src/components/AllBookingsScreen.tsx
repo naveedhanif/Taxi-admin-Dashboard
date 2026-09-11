@@ -766,53 +766,53 @@ export default function AllBookingsScreen({
         })}
       </div>
 
-      {/* Bookings List Card */}
-      <div className="rounded-xl border border-[#E4E2DA] bg-white p-5">
-        <div className="mb-4 flex items-center justify-between text-xs text-[#5F5E5A]">
-          <span>Showing {filteredBookings.length} bookings</span>
-          <span>
-            Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong>
-            {dateFilter !== "all" && (
-              <>
-                {" "}·{" "}
-                <strong className="text-[#2C2C2A]">
-                  {dateFilter === "custom"
-                    ? customStartDate || customEndDate
-                      ? `${customStartDate || "…"} to ${customEndDate || "…"}`
-                      : "Custom range"
-                    : DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
-                </strong>
-              </>
-            )}
-          </span>
+      {/* Summary bar — separate from the day cards below, since it's
+          describing the whole filtered set, not any one day. */}
+      <div className="mb-4 flex items-center justify-between text-xs text-[#5F5E5A]">
+        <span>Showing {filteredBookings.length} bookings</span>
+        <span>
+          Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong>
+          {dateFilter !== "all" && (
+            <>
+              {" "}·{" "}
+              <strong className="text-[#2C2C2A]">
+                {dateFilter === "custom"
+                  ? customStartDate || customEndDate
+                    ? `${customStartDate || "…"} to ${customEndDate || "…"}`
+                    : "Custom range"
+                  : DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
+              </strong>
+            </>
+          )}
+        </span>
+      </div>
+
+      {errorMessage && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+          <AlertCircle size={14} /> {errorMessage}
         </div>
+      )}
 
-        {errorMessage && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
-            <AlertCircle size={14} /> {errorMessage}
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#5F5E5A]">
-              <Loader2 size={16} className="animate-spin" /> Loading bookings…
-            </div>
-          ) : filteredBookings.length === 0 ? (
-            <div className="py-12 text-center text-sm text-[#5F5E5A]">
-              {bookingsList.length === 0 ? "No bookings yet." : "No bookings match your filter criteria."}
-            </div>
-          ) : (
-            groupedBookings.map((group) => (
-              <div key={group.label}>
-                <div className="mb-2 mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#8C8977] first:mt-0">
-                  {group.label}
-                  <span className="h-px flex-1" style={{ background: "#ECE9E0" }} />
-                  {(() => {
-                    const groupTotal = group.bookings.reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
-                    const allFinal = group.bookings.every((b) => b.final_fare != null);
-                    return (
-                      <span className="font-normal normal-case text-[#B4B2A9]">
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-[#E4E2DA] bg-white py-12 text-sm text-[#5F5E5A]">
+          <Loader2 size={16} className="animate-spin" /> Loading bookings…
+        </div>
+      ) : filteredBookings.length === 0 ? (
+        <div className="rounded-xl border border-[#E4E2DA] bg-white py-12 text-center text-sm text-[#5F5E5A]">
+          {bookingsList.length === 0 ? "No bookings yet." : "No bookings match your filter criteria."}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {groupedBookings.map((group) => (
+            <div key={group.label} className="rounded-xl border border-[#E4E2DA] bg-white p-5">
+              <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#8C8977]">
+                {group.label}
+                <span className="h-px flex-1" style={{ background: "#ECE9E0" }} />
+                {(() => {
+                  const groupTotal = group.bookings.reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
+                  const allFinal = group.bookings.every((b) => b.final_fare != null);
+                  return (
+                    <span className="font-normal normal-case text-[#B4B2A9]">
                         {group.bookings.length} · €{groupTotal.toFixed(2)}{!allFinal && " est."}
                       </span>
                     );
@@ -903,10 +903,9 @@ export default function AllBookingsScreen({
                   ))}
                 </div>
               </div>
-            ))
-          )}
+          ))}
         </div>
-      </div>
+      )}
 
       {/* Selected Booking Detail Modal */}
       {selectedBooking && (
