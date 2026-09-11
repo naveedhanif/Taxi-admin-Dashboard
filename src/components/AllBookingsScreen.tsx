@@ -845,15 +845,15 @@ export default function AllBookingsScreen({
                 onClick={() => handleSelectBooking(b)}
                 className="emboss-btn cursor-pointer rounded-xl p-4 transition-all"
               >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="shrink-0 rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
                       <div className="flex items-center gap-1">
                         <Clock size={11} className="text-[#5F5E5A]" />
                         <span>{formatTime(b.scheduled_time)}</span>
                       </div>
                     </div>
-                    <div>
+                    <div className="min-w-0 truncate">
                       <span className="text-sm font-semibold text-[#2C2C2A]">{b.passenger_name}</span>
                       <span className="ml-1.5 text-[11px] font-mono text-[#B4B2A9]">#{b.id.slice(0, 8)}</span>
                     </div>
