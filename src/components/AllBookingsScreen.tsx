@@ -664,14 +664,35 @@ export default function AllBookingsScreen({
       {/* Header */}
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
+          {mode === "history" && (
+            <div className="mb-0.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: "#185FA5" }}>
+              Activity Overview
+            </div>
+          )}
           <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
-            {mode === "history" ? "History" : "Bookings"}
+            {mode === "history" ? "Trip History" : "Bookings"}
           </h1>
           <p className="text-sm text-[#5F5E5A]">
             {mode === "history" ? "Completed and canceled trips" : "Manage passenger pre-bookings and schedule dispatch"}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {mode === "history" && (
+            <div className="relative">
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="emboss-input rounded-full py-2.5 pl-9 pr-8 text-xs font-semibold text-[#2C2C2A] appearance-none"
+              >
+                {DATE_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <Calendar size={13} className="pointer-events-none absolute left-3.5 top-3 text-[#185FA5]" />
+            </div>
+          )}
           <button
             onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
             className="emboss-btn flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-medium text-[#2C2C2A] cursor-pointer"
@@ -799,49 +820,49 @@ export default function AllBookingsScreen({
           rolling window "this_week" already uses elsewhere in this
           file), not a separate invented definition of "week". Tapping
           a day reuses the existing custom-range filter rather than a
-          new filtering mechanism. */}
-      <div className="mb-6 grid grid-cols-7 gap-1.5">
-        {Array.from({ length: 7 }, (_, i) => {
-          const day = new Date();
-          day.setDate(day.getDate() + i);
-          day.setHours(0, 0, 0, 0);
-          const dayEnd = new Date(day);
-          dayEnd.setDate(dayEnd.getDate() + 1);
-          const dayStr = day.toISOString().slice(0, 10);
-          const count = bookingsList.filter((b) => {
-            const t = new Date(b.scheduled_time);
-            return t >= day && t < dayEnd;
-          }).length;
-          const isSelected = dateFilter === "custom" && customStartDate === dayStr && customEndDate === dayStr;
-          return (
-            <button
-              key={dayStr}
-              onClick={() => {
-                setDateFilter("custom");
-                setCustomStartDate(dayStr);
-                setCustomEndDate(dayStr);
-              }}
-              className="flex flex-col items-center gap-0.5 rounded-lg py-2 text-center"
-              style={{
-                background: isSelected ? "#185FA5" : "#F7F7F5",
-                color: isSelected ? "white" : "#2C2C2A",
-              }}
-            >
-              <span className="text-[10px] font-semibold uppercase" style={{ opacity: 0.8 }}>
-                {i === 0 ? "Today" : day.toLocaleDateString(undefined, { weekday: "short" })}
-              </span>
-              <span className="text-sm font-bold">{day.getDate()}</span>
-              {count > 0 && (
-                <span
-                  className="rounded-full px-1.5 text-[9px] font-bold"
-                  style={{ background: isSelected ? "rgba(255,255,255,0.25)" : "#E6F1FB", color: isSelected ? "white" : "#0C447C" }}
-                >
-                  {count}
+          new filtering mechanism. A dot means "at least one real
+          booking that day" — not a fabricated activity indicator. */}
+      <div className="mb-6 rounded-2xl border border-[#E4E2DA] bg-white p-3">
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: 7 }, (_, i) => {
+            const day = new Date();
+            day.setDate(day.getDate() + i);
+            day.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(day);
+            dayEnd.setDate(dayEnd.getDate() + 1);
+            const dayStr = day.toISOString().slice(0, 10);
+            const hasBookings = bookingsList.some((b) => {
+              const t = new Date(b.scheduled_time);
+              return t >= day && t < dayEnd;
+            });
+            const isToday = i === 0;
+            const isSelected = dateFilter === "custom" && customStartDate === dayStr && customEndDate === dayStr;
+            return (
+              <button
+                key={dayStr}
+                onClick={() => {
+                  setDateFilter("custom");
+                  setCustomStartDate(dayStr);
+                  setCustomEndDate(dayStr);
+                }}
+                className="flex flex-col items-center gap-1.5 rounded-xl py-2.5 text-center"
+                style={{
+                  background: isToday ? "#1A1D29" : isSelected ? "#E6F1FB" : "transparent",
+                  color: isToday ? "white" : "#2C2C2A",
+                }}
+              >
+                <span className="text-[10px] font-semibold uppercase" style={{ opacity: 0.6 }}>
+                  {isToday ? "Today" : day.toLocaleDateString(undefined, { weekday: "short" })}
                 </span>
-              )}
-            </button>
-          );
-        })}
+                <span className="text-base font-bold">{day.getDate()}</span>
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: hasBookings ? (isToday ? "#4ADE80" : "#185FA5") : "transparent" }}
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Summary bar — separate from the day cards below, since it's
