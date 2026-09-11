@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane, X } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import ChatPanel from "./ChatPanel";
 import { formatPhoneForLinks } from "../phoneLinks";
@@ -237,6 +237,18 @@ export default function AllBookingsScreen({
     }
   });
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  // Chat bottom sheet — mirrors the passenger app's own tap-to-open
+  // pattern exactly (was previously an always-expanded inline panel
+  // here, unlike the passenger side, which was the actual complaint).
+  const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const chatOpenRef = useRef(chatOpen);
+  chatOpenRef.current = chatOpen;
+
+  useEffect(() => {
+    setChatOpen(false);
+    setHasUnreadChat(false);
+  }, [selectedBooking?.id]);
   // Replaces window.confirm for cancelling — a native browser confirm
   // dialog is too easy to blow through without reading, especially
   // risky once a driver is already mid-trip and a passenger is
@@ -812,11 +824,23 @@ export default function AllBookingsScreen({
                 })()}
               </div>
 
-              {/* In-app chat — addition to, not replacement for, call/
-                  WhatsApp above. Only shown for active (not completed/
-                  cancelled) bookings. */}
+              {/* In-app chat trigger — was previously an always-expanded
+                  inline panel here, unlike the passenger app's tap-to-
+                  open bottom sheet. Now matches that same pattern. */}
               {!["completed", "canceled"].includes(selectedBooking.status) && (
-                <ChatPanel bookingId={selectedBooking.id} />
+                <button
+                  onClick={() => { setChatOpen(true); setHasUnreadChat(false); }}
+                  className="relative flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium text-white"
+                  style={{ background: "#185FA5" }}
+                >
+                  <MessageCircle size={15} /> Chat with passenger
+                  {hasUnreadChat && (
+                    <span
+                      className="absolute right-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border-2 border-white"
+                      style={{ background: "#D9534F" }}
+                    />
+                  )}
+                </button>
               )}
 
               <div className="rounded-lg bg-[#F1EFE8] p-3 space-y-2">
@@ -1116,6 +1140,62 @@ export default function AllBookingsScreen({
           </div>
         );
       })()}
+
+      {/* Chat bottom sheet — mirrors the passenger app's exact pattern.
+          ChatPanel stays mounted whenever a booking with active chat
+          is selected, regardless of chatOpen, so its poll (and the
+          sound/vibrate/unread-dot it triggers) keeps running while the
+          sheet is visually closed — only position/opacity respond to
+          chatOpen. */}
+      {selectedBooking && !["completed", "canceled"].includes(selectedBooking.status) && (
+        <>
+          <div
+            onClick={() => setChatOpen(false)}
+            className="fixed inset-0 z-40 bg-black/40"
+            style={{ opacity: chatOpen ? 1 : 0, pointerEvents: chatOpen ? "auto" : "none", transition: "opacity 200ms ease" }}
+            aria-hidden={!chatOpen}
+          />
+          <div
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-[480px] flex-col rounded-t-2xl"
+            style={{
+              background: "#F7F7F5",
+              boxShadow: "0 -8px 24px rgba(44,44,42,0.18)",
+              maxHeight: "80vh",
+              transform: chatOpen ? "translateY(0)" : "translateY(100%)",
+              transition: "transform 260ms ease",
+            }}
+            role="dialog"
+            aria-label="Chat with passenger"
+            aria-hidden={!chatOpen}
+          >
+            <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full" style={{ background: "#E4E2DA" }} />
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
+                <MessageCircle size={15} color="#185FA5" />
+                Chat with {selectedBooking.passenger_name}
+              </div>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full"
+                style={{ background: "#F0EEE7" }}
+                aria-label="Close chat"
+              >
+                <X size={14} color="#5F5E5A" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <ChatPanel
+                bookingId={selectedBooking.id}
+                hideHeader
+                maxListHeight="55vh"
+                onNewMessage={() => {
+                  if (!chatOpenRef.current) setHasUnreadChat(true);
+                }}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

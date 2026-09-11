@@ -29,7 +29,14 @@ async function callMessages(path: string, body: Record<string, unknown>): Promis
   return data;
 }
 
-export default function ChatPanel({ bookingId }: { bookingId: string }) {
+interface ChatPanelProps {
+  bookingId: string;
+  hideHeader?: boolean;
+  maxListHeight?: string;
+  onNewMessage?: () => void;
+}
+
+export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight, onNewMessage }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -106,6 +113,7 @@ export default function ChatPanel({ bookingId }: { bookingId: string }) {
               // Not supported — ignore.
             }
           }
+          onNewMessage?.();
         }
       }
       knownIdsRef.current = new Set(fetched.map((m) => m.id));
@@ -144,10 +152,12 @@ export default function ChatPanel({ bookingId }: { bookingId: string }) {
   return (
     <div className="rounded-xl" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
       <audio ref={audioRef} src="/message-pop.wav" preload="auto" />
-      <div className="flex items-center gap-2 border-b border-[#ECE9E0] px-3.5 py-2.5 text-xs font-semibold text-[#5F5E5A]">
-        <MessageCircle size={13} /> Messages
-      </div>
-      <div ref={scrollRef} className="max-h-52 space-y-2 overflow-y-auto p-3">
+      {!hideHeader && (
+        <div className="flex items-center gap-2 border-b border-[#ECE9E0] px-3.5 py-2.5 text-xs font-semibold text-[#5F5E5A]">
+          <MessageCircle size={13} /> Messages
+        </div>
+      )}
+      <div ref={scrollRef} className="space-y-2 overflow-y-auto p-3" style={{ maxHeight: maxListHeight || "13rem" }}>
         {!loaded ? (
           <div className="flex items-center justify-center gap-1.5 py-4 text-xs text-[#8C8977]">
             <Loader2 size={12} className="animate-spin" /> Loading…
