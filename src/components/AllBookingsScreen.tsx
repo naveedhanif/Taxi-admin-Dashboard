@@ -391,8 +391,27 @@ export default function AllBookingsScreen({
     };
   }, [driverId]);
 
+  // "Today"/"Tomorrow" for the next couple of days, plain weekday
+  // names for the rest of this week (exactly what was asked for —
+  // "if booking is for Friday, show it under Friday"), then a full
+  // date once far enough out that a bare day name would be ambiguous.
+  function groupLabel(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startOfDate.getTime() - startOfToday.getTime()) / 86400000);
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays === -1) return "Yesterday";
+    if (diffDays > 1 && diffDays < 7) return date.toLocaleDateString(undefined, { weekday: "long" });
+    if (diffDays < -1 && diffDays > -7) return date.toLocaleDateString(undefined, { weekday: "long" });
+    return date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
+  }
+
   const filterOptions = [
     { value: "all", label: "All Statuses" },
+    { value: "history", label: "History (Completed + Canceled)" },
     { value: "pending", label: "Pending" },
     { value: "confirmed", label: "Confirmed" },
     { value: "en_route", label: "En Route" },
@@ -415,7 +434,12 @@ export default function AllBookingsScreen({
 
   const filteredBookings = bookingsList
     .filter((b) => {
-      const matchesStatus = filterStatus === "all" || b.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all"
+          ? true
+          : filterStatus === "history"
+          ? b.status === "completed" || b.status === "canceled"
+          : b.status === filterStatus;
       const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter, customStartDate, customEndDate);
       const matchesSearch =
         b.passenger_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -428,6 +452,17 @@ export default function AllBookingsScreen({
       const timeB = new Date(b.scheduled_time).getTime();
       return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
     });
+
+  // Groups the already-sorted list by adjacent day label — a single
+  // pass, not a full re-sort, so it naturally respects whichever sort
+  // direction (soonest-first or latest-first) is currently selected.
+  const groupedBookings = filteredBookings.reduce((groups: { label: string; bookings: Booking[] }[], b) => {
+    const label = groupLabel(b.scheduled_time);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.bookings.push(b);
+    else groups.push({ label, bookings: [b] });
+    return groups;
+  }, []);
 
   // Marks a booking as viewed the moment the driver opens its details —
   // this is what clears it from the unviewed-count badge (sidebar +
@@ -718,7 +753,15 @@ export default function AllBookingsScreen({
               {bookingsList.length === 0 ? "No bookings yet." : "No bookings match your filter criteria."}
             </div>
           ) : (
-            filteredBookings.map((b) => (
+            groupedBookings.map((group) => (
+              <div key={group.label}>
+                <div className="mb-2 mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#8C8977] first:mt-0">
+                  {group.label}
+                  <span className="h-px flex-1" style={{ background: "#ECE9E0" }} />
+                  <span className="font-normal normal-case text-[#B4B2A9]">{group.bookings.length}</span>
+                </div>
+                <div className="space-y-3">
+                  {group.bookings.map((b) => (
               <div
                 key={b.id}
                 onClick={() => handleSelectBooking(b)}
@@ -772,6 +815,9 @@ export default function AllBookingsScreen({
                     </div>
                   </div>
                   <ChevronRight size={16} className="text-[#B4B2A9]" />
+                </div>
+              </div>
+                  ))}
                 </div>
               </div>
             ))
