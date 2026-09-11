@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane, X, Circle, History } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane, X, Circle, History, ArrowLeft } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import ChatPanel from "./ChatPanel";
 import { formatPhoneForLinks } from "../phoneLinks";
@@ -936,10 +936,24 @@ export default function AllBookingsScreen({
 
       {/* Selected Booking Detail Modal */}
       {selectedBooking && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-[#E4E2DA] bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6">
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
+          onClick={() => setSelectedBooking(null)}
+        >
+          <div
+            className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-[#E4E2DA] bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between border-b border-[#E4E2DA] pb-3">
-              <div>
+              <button
+                onClick={() => setSelectedBooking(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "#F1EFE8" }}
+                aria-label="Close"
+              >
+                <ArrowLeft size={15} className="text-[#5F5E5A]" />
+              </button>
+              <div className="flex-1 px-2">
                 <div className="text-xs font-mono text-[#5F5E5A]">{selectedBooking.id.slice(0, 8)}</div>
                 <h3 className="text-lg font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
                   {selectedBooking.passenger_name}
