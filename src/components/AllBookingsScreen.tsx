@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane, X } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import ChatPanel from "./ChatPanel";
@@ -27,6 +27,7 @@ export interface Booking {
   flight_status: string | null;
   flight_scheduled_arrival: string | null;
   flight_revised_arrival: string | null;
+  estimated_duration_minutes: number | null;
 }
 
 function useGoogleFont() {
@@ -337,7 +338,7 @@ export default function AllBookingsScreen({
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival")
+        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival, estimated_duration_minutes")
         .eq("driver_id", driverId)
         // Exclude bookings the passenger hasn't actually paid for yet —
         // a booking sits in "awaiting_payment" between PaymentIntent
@@ -716,6 +717,55 @@ export default function AllBookingsScreen({
         </div>
       )}
 
+      {/* Week at a glance — real counts per day (next 7 days, same
+          rolling window "this_week" already uses elsewhere in this
+          file), not a separate invented definition of "week". Tapping
+          a day reuses the existing custom-range filter rather than a
+          new filtering mechanism. */}
+      <div className="mb-6 grid grid-cols-7 gap-1.5">
+        {Array.from({ length: 7 }, (_, i) => {
+          const day = new Date();
+          day.setDate(day.getDate() + i);
+          day.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(day);
+          dayEnd.setDate(dayEnd.getDate() + 1);
+          const dayStr = day.toISOString().slice(0, 10);
+          const count = bookingsList.filter((b) => {
+            const t = new Date(b.scheduled_time);
+            return t >= day && t < dayEnd;
+          }).length;
+          const isSelected = dateFilter === "custom" && customStartDate === dayStr && customEndDate === dayStr;
+          return (
+            <button
+              key={dayStr}
+              onClick={() => {
+                setDateFilter("custom");
+                setCustomStartDate(dayStr);
+                setCustomEndDate(dayStr);
+              }}
+              className="flex flex-col items-center gap-0.5 rounded-lg py-2 text-center"
+              style={{
+                background: isSelected ? "#185FA5" : "#F7F7F5",
+                color: isSelected ? "white" : "#2C2C2A",
+              }}
+            >
+              <span className="text-[10px] font-semibold uppercase" style={{ opacity: 0.8 }}>
+                {i === 0 ? "Today" : day.toLocaleDateString(undefined, { weekday: "short" })}
+              </span>
+              <span className="text-sm font-bold">{day.getDate()}</span>
+              {count > 0 && (
+                <span
+                  className="rounded-full px-1.5 text-[9px] font-bold"
+                  style={{ background: isSelected ? "rgba(255,255,255,0.25)" : "#E6F1FB", color: isSelected ? "white" : "#0C447C" }}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Bookings List Card */}
       <div className="rounded-xl border border-[#E4E2DA] bg-white p-5">
         <div className="mb-4 flex items-center justify-between text-xs text-[#5F5E5A]">
@@ -758,10 +808,19 @@ export default function AllBookingsScreen({
                 <div className="mb-2 mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#8C8977] first:mt-0">
                   {group.label}
                   <span className="h-px flex-1" style={{ background: "#ECE9E0" }} />
-                  <span className="font-normal normal-case text-[#B4B2A9]">{group.bookings.length}</span>
+                  {(() => {
+                    const groupTotal = group.bookings.reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
+                    const allFinal = group.bookings.every((b) => b.final_fare != null);
+                    return (
+                      <span className="font-normal normal-case text-[#B4B2A9]">
+                        {group.bookings.length} · €{groupTotal.toFixed(2)}{!allFinal && " est."}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="space-y-3">
-                  {group.bookings.map((b) => (
+                  {group.bookings.map((b, idx) => (
+                    <Fragment key={b.id}>
               <div
                 key={b.id}
                 onClick={() => handleSelectBooking(b)}
@@ -817,6 +876,30 @@ export default function AllBookingsScreen({
                   <ChevronRight size={16} className="text-[#B4B2A9]" />
                 </div>
               </div>
+                    {(() => {
+                      // Real gap detection — only between two genuinely
+                      // still-upcoming trips (not history), using this
+                      // trip's actual estimated END time (start +
+                      // duration), not just the gap between start times,
+                      // which would overstate real free time.
+                      const next = group.bookings[idx + 1];
+                      const isUpcomingStatus = ["pending", "confirmed", "en_route", "arrived", "in_progress"].includes(b.status);
+                      if (!next || !isUpcomingStatus) return null;
+                      const thisEnd = new Date(b.scheduled_time).getTime() + (b.estimated_duration_minutes ?? 30) * 60000;
+                      const nextStart = new Date(next.scheduled_time).getTime();
+                      const gapMinutes = Math.round((nextStart - thisEnd) / 60000);
+                      if (gapMinutes < 180) return null;
+                      const gapHours = Math.floor(gapMinutes / 60);
+                      const gapMins = gapMinutes % 60;
+                      const gapLabel = gapMins > 0 ? `${gapHours}h ${gapMins}m` : `${gapHours}h`;
+                      return (
+                        <div className="my-1.5 flex items-center gap-2 px-1 text-[11px]" style={{ color: "#8C8977" }}>
+                          <Clock size={11} />
+                          {gapLabel} free before your {formatTime(next.scheduled_time)} pickup — worth a break?
+                        </div>
+                      );
+                    })()}
+                  </Fragment>
                   ))}
                 </div>
               </div>
