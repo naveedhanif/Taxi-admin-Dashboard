@@ -28,6 +28,8 @@ export interface Booking {
   flight_scheduled_arrival: string | null;
   flight_revised_arrival: string | null;
   estimated_duration_minutes: number | null;
+  tip_amount: number | null;
+  distance_km: number | null;
 }
 
 function useGoogleFont() {
@@ -344,7 +346,7 @@ export default function AllBookingsScreen({
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival, estimated_duration_minutes")
+        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival, estimated_duration_minutes, tip_amount, distance_km")
         .eq("driver_id", driverId)
         // Exclude bookings the passenger hasn't actually paid for yet —
         // a booking sits in "awaiting_payment" between PaymentIntent
@@ -442,6 +444,30 @@ export default function AllBookingsScreen({
     { value: "past", label: "Past" },
     { value: "custom", label: "Custom range…" },
   ];
+
+  // Real counts per status, computed independent of filterStatus itself
+  // (so the pills always show accurate totals, not a count that shrinks
+  // to match whichever pill happens to be selected) — but still
+  // respecting mode/date/search, since those are genuine scope
+  // boundaries, not just a display filter.
+  const statusCounts = (() => {
+    const base = bookingsList.filter((b) => {
+      const isHistoryStatus = b.status === "completed" || b.status === "canceled";
+      if (mode === "history" && !isHistoryStatus) return false;
+      if (mode === "upcoming" && isHistoryStatus) return false;
+      const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter, customStartDate, customEndDate);
+      const matchesSearch =
+        b.passenger_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.pickup_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.dropoff_address.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesDate && matchesSearch;
+    });
+    return {
+      all: base.length,
+      completed: base.filter((b) => b.status === "completed").length,
+      canceled: base.filter((b) => b.status === "canceled").length,
+    };
+  })();
 
   const filteredBookings = bookingsList
     .filter((b) => {
@@ -699,6 +725,39 @@ export default function AllBookingsScreen({
         </div>
       </div>
 
+      {mode === "history" && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {[
+            { value: "all", label: "All Trips", count: statusCounts.all },
+            { value: "completed", label: "Completed", count: statusCounts.completed },
+            { value: "canceled", label: "Cancelled", count: statusCounts.canceled },
+          ].map((tab) => {
+            const isSelected = filterStatus === tab.value;
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setFilterStatus(tab.value)}
+                className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold"
+                style={{
+                  background: isSelected ? "#185FA5" : "white",
+                  color: isSelected ? "white" : "#2C2C2A",
+                  border: isSelected ? "none" : "1px solid #E4E2DA",
+                }}
+              >
+                {tab.label}
+                <span
+                  className="rounded-full px-1.5 text-[10px]"
+                  style={{ background: isSelected ? "rgba(255,255,255,0.25)" : "#F1EFE8", color: isSelected ? "white" : "#5F5E5A" }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+
       {/* Custom range inputs — only shown once "Custom range…" is picked
           above, rather than always taking up space for a filter most
           drivers won't use most of the time. */}
@@ -856,6 +915,18 @@ export default function AllBookingsScreen({
                     <div className="min-w-0 truncate">
                       <span className="text-sm font-semibold text-[#2C2C2A]">{b.passenger_name}</span>
                       <span className="ml-1.5 text-[11px] font-mono text-[#B4B2A9]">#{b.id.slice(0, 8)}</span>
+                      {/* Duration/distance — real numbers from the original
+                          route calculation, not a GPS-verified actual
+                          drive (this app doesn't track that), shown only
+                          on History since it's most meaningful for a
+                          trip that's already happened. */}
+                      {mode === "history" && (b.estimated_duration_minutes || b.distance_km) && (
+                        <div className="text-[11px] text-[#8C8977]">
+                          {b.estimated_duration_minutes ? `${Math.round(b.estimated_duration_minutes)} mins` : ""}
+                          {b.estimated_duration_minutes && b.distance_km ? " · " : ""}
+                          {b.distance_km ? `${Number(b.distance_km).toFixed(1)} km` : ""}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <StatusPill status={b.status} />
@@ -871,7 +942,10 @@ export default function AllBookingsScreen({
                     <Circle size={9} fill="#185FA5" stroke="none" />
                   </div>
                   <div className="flex-1 space-y-2.5 text-xs text-[#2C2C2A]">
-                    <div>{b.pickup_address}</div>
+                    <div>
+                      {b.pickup_address}
+                      {b.flight_number && <span className="ml-1.5 text-[11px] text-[#8C8977]">· Flight {b.flight_number}</span>}
+                    </div>
                     {b.stops && b.stops.length > 0 && (
                       <span className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#F1EFE8", color: "#B4772E" }}>
                         +{b.stops.length} stop{b.stops.length === 1 ? "" : "s"}
@@ -882,20 +956,35 @@ export default function AllBookingsScreen({
                 </div>
 
                 <div className="flex items-center justify-between gap-3 border-t pt-3" style={{ borderColor: "#ECE9E0" }}>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-base font-bold text-[#2C2C2A]">
                       €{(b.final_fare ?? b.estimated_fare ?? 0).toFixed(2)}
                     </span>
-                    {b.payment_timing === "later" && (
-                      <span
-                        className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                        style={{
-                          background: b.balance_collected ? "#EAF3DE" : "#FAEEDA",
-                          color: b.balance_collected ? "#27500A" : "#633806",
-                        }}
-                      >
-                        <Wallet size={9} /> {b.balance_collected ? "Collected" : "Pay in taxi"}
+                    {/* Real tip data — bookings.tip_amount, set once a
+                        passenger actually pays one via Stripe. Never
+                        shown as a fabricated "vehicle class" style tag —
+                        this app has no such concept. */}
+                    {Number(b.tip_amount) > 0 && (
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "#EAF3DE", color: "#27500A" }}>
+                        +€{Number(b.tip_amount).toFixed(2)} tip
                       </span>
+                    )}
+                    {b.status === "canceled" && b.deposit_payment_status === "paid" ? (
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
+                        Deposit kept: €{Number(b.deposit_amount ?? 0).toFixed(2)}
+                      </span>
+                    ) : (
+                      b.payment_timing === "later" && (
+                        <span
+                          className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background: b.balance_collected ? "#EAF3DE" : "#FAEEDA",
+                            color: b.balance_collected ? "#27500A" : "#633806",
+                          }}
+                        >
+                          <Wallet size={9} /> {b.balance_collected ? "Collected" : "Pay in taxi"}
+                        </span>
+                      )
                     )}
                   </div>
                   <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "#F7F7F5" }}>
