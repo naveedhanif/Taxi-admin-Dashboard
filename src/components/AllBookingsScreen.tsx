@@ -466,8 +466,19 @@ export default function AllBookingsScreen({
       all: base.length,
       completed: base.filter((b) => b.status === "completed").length,
       canceled: base.filter((b) => b.status === "canceled").length,
+      tipped: base.filter((b) => Number(b.tip_amount) > 0).length,
     };
   })();
+
+  // The 7-day window's start date — navigable via prev/next, not fixed
+  // to "today onward". History defaults to the past week (completed
+  // trips are behind you, not ahead), Bookings keeps looking forward.
+  const [weekWindowStart, setWeekWindowStart] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + (mode === "history" ? -6 : 0));
+    return d;
+  });
 
   const filteredBookings = bookingsList
     .filter((b) => {
@@ -483,6 +494,8 @@ export default function AllBookingsScreen({
           ? true
           : filterStatus === "history"
           ? b.status === "completed" || b.status === "canceled"
+          : filterStatus === "tipped"
+          ? Number(b.tip_amount) > 0
           : b.status === filterStatus;
       const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter, customStartDate, customEndDate);
       const matchesSearch =
@@ -752,6 +765,7 @@ export default function AllBookingsScreen({
             { value: "all", label: "All Trips", count: statusCounts.all },
             { value: "completed", label: "Completed", count: statusCounts.completed },
             { value: "canceled", label: "Cancelled", count: statusCounts.canceled },
+            { value: "tipped", label: "Tips", count: statusCounts.tipped },
           ].map((tab) => {
             const isSelected = filterStatus === tab.value;
             return (
@@ -816,18 +830,42 @@ export default function AllBookingsScreen({
         </div>
       )}
 
-      {/* Week at a glance — real counts per day (next 7 days, same
-          rolling window "this_week" already uses elsewhere in this
-          file), not a separate invented definition of "week". Tapping
-          a day reuses the existing custom-range filter rather than a
-          new filtering mechanism. A dot means "at least one real
-          booking that day" — not a fabricated activity indicator. */}
+      {/* Week at a glance — a genuinely navigable 7-day window (prev/
+          next), not a fixed "today onward" snapshot. A dot means "at
+          least one real booking that day" — not a fabricated activity
+          indicator. */}
       <div className="mb-6 rounded-2xl border border-[#E4E2DA] bg-white p-3">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <button
+            onClick={() => setWeekWindowStart((prev) => { const d = new Date(prev); d.setDate(d.getDate() - 7); return d; })}
+            className="flex h-7 w-7 items-center justify-center rounded-full"
+            style={{ background: "#F1EFE8" }}
+            aria-label="Previous week"
+          >
+            <ChevronRight size={13} className="rotate-180 text-[#5F5E5A]" />
+          </button>
+          <span className="text-[11px] font-semibold text-[#5F5E5A]">
+            {weekWindowStart.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+            {" – "}
+            {(() => {
+              const end = new Date(weekWindowStart);
+              end.setDate(end.getDate() + 6);
+              return end.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+            })()}
+          </span>
+          <button
+            onClick={() => setWeekWindowStart((prev) => { const d = new Date(prev); d.setDate(d.getDate() + 7); return d; })}
+            className="flex h-7 w-7 items-center justify-center rounded-full"
+            style={{ background: "#F1EFE8" }}
+            aria-label="Next week"
+          >
+            <ChevronRight size={13} className="text-[#5F5E5A]" />
+          </button>
+        </div>
         <div className="grid grid-cols-7 gap-1">
           {Array.from({ length: 7 }, (_, i) => {
-            const day = new Date();
+            const day = new Date(weekWindowStart);
             day.setDate(day.getDate() + i);
-            day.setHours(0, 0, 0, 0);
             const dayEnd = new Date(day);
             dayEnd.setDate(dayEnd.getDate() + 1);
             const dayStr = day.toISOString().slice(0, 10);
@@ -835,7 +873,7 @@ export default function AllBookingsScreen({
               const t = new Date(b.scheduled_time);
               return t >= day && t < dayEnd;
             });
-            const isToday = i === 0;
+            const isToday = day.toDateString() === new Date().toDateString();
             const isSelected = dateFilter === "custom" && customStartDate === dayStr && customEndDate === dayStr;
             return (
               <button
@@ -959,11 +997,15 @@ export default function AllBookingsScreen({
                 <div className="mb-3 flex gap-2.5 pl-0.5">
                   <div className="flex flex-col items-center pt-1">
                     <Circle size={9} fill="#639922" stroke="none" />
-                    <div className="my-0.5 w-px flex-1" style={{ background: "#D8D5CB", minHeight: 16 }} />
-                    <Circle size={9} fill="#185FA5" stroke="none" />
+                    <div
+                      className="my-0.5 w-px flex-1"
+                      style={{ background: "#D8D5CB", minHeight: 16, borderLeft: b.status === "canceled" ? "1px dashed #D8D5CB" : "none" }}
+                    />
+                    <Circle size={9} fill={b.status === "canceled" ? "#D8D5CB" : "#185FA5"} stroke="none" />
                   </div>
                   <div className="flex-1 space-y-2.5 text-xs text-[#2C2C2A]">
                     <div>
+                      {mode === "history" && <span className="mr-1.5 font-mono text-[11px] text-[#8C8977]">{formatTime(b.scheduled_time)}</span>}
                       {b.pickup_address}
                       {b.flight_number && <span className="ml-1.5 text-[11px] text-[#8C8977]">· Flight {b.flight_number}</span>}
                     </div>
@@ -972,7 +1014,15 @@ export default function AllBookingsScreen({
                         +{b.stops.length} stop{b.stops.length === 1 ? "" : "s"}
                       </span>
                     )}
-                    <div>{b.dropoff_address}</div>
+                    <div style={b.status === "canceled" ? { color: "#B4B2A9" } : undefined}>
+                      {mode === "history" && b.status !== "canceled" && b.estimated_duration_minutes && (
+                        <span className="mr-1.5 font-mono text-[11px] text-[#8C8977]">
+                          {formatTime(new Date(new Date(b.scheduled_time).getTime() + b.estimated_duration_minutes * 60000).toISOString())}
+                        </span>
+                      )}
+                      {b.dropoff_address}
+                      {b.status === "canceled" && <span className="ml-1.5 text-[11px]">(not reached)</span>}
+                    </div>
                   </div>
                 </div>
 
