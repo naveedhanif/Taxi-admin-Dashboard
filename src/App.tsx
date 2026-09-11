@@ -34,12 +34,13 @@ import {
   Users,
   User,
   Home,
-  Plus,
+  History as HistoryIcon,
 } from "lucide-react";
 
-const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", settings: "/settings", earnings: "/earnings", customers: "/customers", profile: "/profile" };
-function screenFromPath(pathname: string): "overview" | "bookings" | "settings" | "earnings" | "customers" | "profile" {
+const SCREEN_PATHS: Record<string, string> = { overview: "/", bookings: "/bookings", history: "/history", settings: "/settings", earnings: "/earnings", customers: "/customers", profile: "/profile" };
+function screenFromPath(pathname: string): "overview" | "bookings" | "history" | "settings" | "earnings" | "customers" | "profile" {
   if (pathname.startsWith("/bookings")) return "bookings";
+  if (pathname.startsWith("/history")) return "history";
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/earnings")) return "earnings";
   if (pathname.startsWith("/customers")) return "customers";
@@ -47,7 +48,7 @@ function screenFromPath(pathname: string): "overview" | "bookings" | "settings" 
   return "overview";
 }
 
-function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings" | "earnings" | "customers" | "profile" {
+function initialDashboardScreen(): "overview" | "login" | "bookings" | "history" | "settings" | "earnings" | "customers" | "profile" {
   const pathScreen = screenFromPath(window.location.pathname);
   // Landing exactly on "/" is ambiguous: it's either a real, deliberate
   // navigation to Dashboard, OR — critically — it's iOS relaunching an
@@ -61,7 +62,7 @@ function initialDashboardScreen(): "overview" | "login" | "bookings" | "settings
   if (window.location.pathname === "/") {
     try {
       const saved = localStorage.getItem("taxi_admin_dashboard_screen");
-      if (saved === "bookings" || saved === "settings" || saved === "earnings" || saved === "customers" || saved === "profile") return saved;
+      if (saved === "bookings" || saved === "history" || saved === "settings" || saved === "earnings" || saved === "customers" || saved === "profile") return saved;
     } catch {
       // Ignore — storage unavailable, just use the path-derived default.
     }
@@ -74,7 +75,7 @@ export default function App() {
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
   // Two layers working together, not one or the other — see
   // initialDashboardScreen()'s comment for why URL alone wasn't enough.
-  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "settings" | "earnings" | "customers" | "profile">(
+  const [dashboardScreen, setDashboardScreen] = useState<"overview" | "login" | "bookings" | "history" | "settings" | "earnings" | "customers" | "profile">(
     initialDashboardScreen
   );
   // Mobile: drawer is closed by default, opened via hamburger.
@@ -101,7 +102,7 @@ export default function App() {
       window.history.pushState(null, "", targetPath);
       setCurrentPath(targetPath);
     }
-    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "settings" || dashboardScreen === "earnings" || dashboardScreen === "customers" || dashboardScreen === "profile") {
+    if (dashboardScreen === "overview" || dashboardScreen === "bookings" || dashboardScreen === "history" || dashboardScreen === "settings" || dashboardScreen === "earnings" || dashboardScreen === "customers" || dashboardScreen === "profile") {
       try {
         localStorage.setItem("taxi_admin_dashboard_screen", dashboardScreen);
       } catch {
@@ -282,6 +283,7 @@ export default function App() {
     { id: "overview", label: "Dashboard", icon: LayoutDashboard },
     { id: "profile", label: "Profile", icon: User },
     { id: "bookings", label: "Bookings", icon: Calendar },
+    { id: "history", label: "History", icon: HistoryIcon },
     { id: "earnings", label: "Earnings", icon: TrendingUp },
     { id: "customers", label: "Customers", icon: Users },
     { id: "settings", label: "Settings", icon: SettingsIcon },
@@ -573,8 +575,10 @@ export default function App() {
                   driverId={driverId}
                   openBookingId={openBookingId}
                   onOpenBookingHandled={() => setOpenBookingId(null)}
+                  mode="upcoming"
                 />
               )}
+              {dashboardScreen === "history" && <AllBookingsScreen driverId={driverId} mode="history" />}
               {dashboardScreen === "settings" && <SettingsScreen driverId={driverId} />}
               {dashboardScreen === "earnings" && <EarningsScreen driverId={driverId} />}
               {dashboardScreen === "customers" && <CustomersScreen driverId={driverId} />}
@@ -587,7 +591,10 @@ export default function App() {
       {/* Mobile bottom nav — desktop keeps the existing sidebar
           unchanged; this is purely additive for small screens. Real
           data only: unviewedCount is the same already-tracked value
-          the sidebar's own badge uses, not a new invented counter. */}
+          the sidebar's own badge uses, not a new invented counter.
+          The center "+" quick-add button was removed — it just
+          duplicated the Bookings screen's own "Add booking" action
+          and wasn't earning its place as a dedicated slot. */}
       <nav
         className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
         style={{ background: "white", borderColor: "#ECE9E0", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
@@ -595,6 +602,9 @@ export default function App() {
         {[
           { id: "overview", label: "Home", icon: Home },
           { id: "bookings", label: "Bookings", icon: Calendar, badge: unviewedCount },
+          { id: "history", label: "History", icon: HistoryIcon },
+          { id: "earnings", label: "Earnings", icon: TrendingUp },
+          { id: "settings", label: "Settings", icon: SettingsIcon },
         ].map((item) => {
           const Icon = item.icon;
           const isActive = dashboardScreen === item.id;
@@ -607,7 +617,7 @@ export default function App() {
             >
               <Icon size={20} />
               {item.label}
-              {item.badge != null && item.badge > 0 && (
+              {"badge" in item && item.badge != null && item.badge > 0 && (
                 <span
                   className="absolute right-1/2 top-0 flex h-4 min-w-[16px] translate-x-3 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
                   style={{ background: "#185FA5" }}
@@ -615,34 +625,6 @@ export default function App() {
                   {item.badge > 9 ? "9+" : item.badge}
                 </span>
               )}
-            </button>
-          );
-        })}
-
-        <button
-          onClick={() => selectScreen("bookings")}
-          className="mx-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white"
-          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)", boxShadow: "3px 3px 10px rgba(4,44,83,0.35)" }}
-          aria-label="Add booking"
-        >
-          <Plus size={22} />
-        </button>
-
-        {[
-          { id: "earnings", label: "Earnings", icon: TrendingUp },
-          { id: "settings", label: "Settings", icon: SettingsIcon },
-        ].map((item) => {
-          const Icon = item.icon;
-          const isActive = dashboardScreen === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => selectScreen(item.id)}
-              className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-medium"
-              style={{ color: isActive ? "#185FA5" : "#8C8977" }}
-            >
-              <Icon size={20} />
-              {item.label}
             </button>
           );
         })}

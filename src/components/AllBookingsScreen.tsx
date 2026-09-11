@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from "react";
-import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane, X } from "lucide-react";
+import { Search, MapPin, Calendar, Clock, ArrowUpDown, Filter, ChevronRight, User, Phone, Loader2, AlertCircle, AlertTriangle, Wallet, Check, Banknote, CreditCard, MessageCircle, CheckCircle2, Navigation, FlagTriangleRight, XCircle, PlayCircle, Plane, X, Circle, History } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import ChatPanel from "./ChatPanel";
 import { formatPhoneForLinks } from "../phoneLinks";
@@ -93,15 +93,16 @@ function StatusPill({ status }: { status: Booking["status"] }) {
     en_route: { bg: "#E1F0FF", text: "#0C4A6E", label: "En Route" },
     arrived: { bg: "#F3E8FF", text: "#581C87", label: "Arrived" },
     in_progress: { bg: "#E0F2FE", text: "#0369A1", label: "In Progress" },
-    completed: { bg: "#F1EFE8", text: "#2C2C2A", label: "Completed" },
+    completed: { bg: "#EAF3DE", text: "#27500A", label: "Completed" },
     canceled: { bg: "#FEE2E2", text: "#991B1B", label: "Canceled" },
   };
   const s = map[status] || { bg: "#F1EFE8", text: "#2C2C2A", label: status };
   return (
     <span
-      className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+      className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium"
       style={{ backgroundColor: s.bg, color: s.text, fontFamily: "Inter" }}
     >
+      {status === "completed" ? <Check size={10} /> : <Circle size={6} fill={s.text} stroke="none" />}
       {s.label}
     </span>
   );
@@ -174,10 +175,15 @@ export default function AllBookingsScreen({
   driverId,
   openBookingId,
   onOpenBookingHandled,
+  mode = "upcoming",
 }: {
   driverId: string | null;
   openBookingId?: string | null;
   onOpenBookingHandled?: () => void;
+  // "upcoming" (the Bookings screen) never shows completed/canceled
+  // trips — those live on the separate History screen ("history" mode)
+  // instead, which only ever shows completed/canceled.
+  mode?: "upcoming" | "history";
 }) {
   useGoogleFont();
   const [bookingsList, setBookingsList] = useState<Booking[]>([]);
@@ -410,17 +416,21 @@ export default function AllBookingsScreen({
     return date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
   }
 
-  const filterOptions = [
-    { value: "all", label: "All Statuses" },
-    { value: "history", label: "History (Completed + Canceled)" },
-    { value: "pending", label: "Pending" },
-    { value: "confirmed", label: "Confirmed" },
-    { value: "en_route", label: "En Route" },
-    { value: "arrived", label: "Arrived" },
-    { value: "in_progress", label: "In Progress" },
-    { value: "completed", label: "Completed" },
-    { value: "canceled", label: "Canceled" },
-  ];
+  const filterOptions =
+    mode === "history"
+      ? [
+          { value: "all", label: "All (Completed + Canceled)" },
+          { value: "completed", label: "Completed" },
+          { value: "canceled", label: "Canceled" },
+        ]
+      : [
+          { value: "all", label: "All Statuses" },
+          { value: "pending", label: "Pending" },
+          { value: "confirmed", label: "Confirmed" },
+          { value: "en_route", label: "En Route" },
+          { value: "arrived", label: "Arrived" },
+          { value: "in_progress", label: "In Progress" },
+        ];
 
   const DATE_FILTER_OPTIONS = [
     { value: "all", label: "All dates" },
@@ -435,6 +445,13 @@ export default function AllBookingsScreen({
 
   const filteredBookings = bookingsList
     .filter((b) => {
+      // Hard mode boundary, independent of whatever the status dropdown
+      // is set to — Bookings (upcoming) and History are two genuinely
+      // separate views, not the same list with a different default.
+      const isHistoryStatus = b.status === "completed" || b.status === "canceled";
+      if (mode === "history" && !isHistoryStatus) return false;
+      if (mode === "upcoming" && isHistoryStatus) return false;
+
       const matchesStatus =
         filterStatus === "all"
           ? true
@@ -622,9 +639,11 @@ export default function AllBookingsScreen({
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
-            All Bookings
+            {mode === "history" ? "History" : "Bookings"}
           </h1>
-          <p className="text-sm text-[#5F5E5A]">Manage passenger pre-bookings and schedule dispatch</p>
+          <p className="text-sm text-[#5F5E5A]">
+            {mode === "history" ? "Completed and canceled trips" : "Manage passenger pre-bookings and schedule dispatch"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -824,56 +843,64 @@ export default function AllBookingsScreen({
               <div
                 key={b.id}
                 onClick={() => handleSelectBooking(b)}
-                className="emboss-btn flex cursor-pointer flex-col justify-between gap-3 rounded-xl p-4 transition-all md:flex-row md:items-center"
+                className="emboss-btn cursor-pointer rounded-xl p-4 transition-all"
               >
-                <div className="flex items-start gap-3">
-                  <div className="rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
-                    <div className="flex items-center gap-1">
-                      <Clock size={11} className="text-[#5F5E5A]" />
-                      <span>{formatTime(b.scheduled_time)}</span>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
+                      <div className="flex items-center gap-1">
+                        <Clock size={11} className="text-[#5F5E5A]" />
+                        <span>{formatTime(b.scheduled_time)}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-[#2C2C2A]">{b.passenger_name}</span>
+                      <span className="ml-1.5 text-[11px] font-mono text-[#B4B2A9]">#{b.id.slice(0, 8)}</span>
                     </div>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-[#2C2C2A]">{b.passenger_name}</span>
-                      <span className="text-[11px] font-mono text-[#B4B2A9]">{b.id.slice(0, 8)}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5F5E5A]">
-                      <span className="flex items-center gap-1">
-                        <MapPin size={12} className="text-[#185FA5]" /> {b.pickup_address}
+                  <StatusPill status={b.status} />
+                </div>
+
+                {/* Route — stacked pickup/dropoff with a connecting line,
+                    matching the reference layout, instead of the
+                    previous single truncated pickup → dropoff line. */}
+                <div className="mb-3 flex gap-2.5 pl-0.5">
+                  <div className="flex flex-col items-center pt-1">
+                    <Circle size={9} fill="#639922" stroke="none" />
+                    <div className="my-0.5 w-px flex-1" style={{ background: "#D8D5CB", minHeight: 16 }} />
+                    <Circle size={9} fill="#185FA5" stroke="none" />
+                  </div>
+                  <div className="flex-1 space-y-2.5 text-xs text-[#2C2C2A]">
+                    <div>{b.pickup_address}</div>
+                    {b.stops && b.stops.length > 0 && (
+                      <span className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#F1EFE8", color: "#B4772E" }}>
+                        +{b.stops.length} stop{b.stops.length === 1 ? "" : "s"}
                       </span>
-                      {b.stops && b.stops.length > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#F1EFE8", color: "#B4772E" }}>
-                          +{b.stops.length} stop{b.stops.length === 1 ? "" : "s"}
-                        </span>
-                      )}
-                      <span>→</span>
-                      <span>{b.dropoff_address}</span>
-                    </div>
+                    )}
+                    <div>{b.dropoff_address}</div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 md:justify-end">
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-[#2C2C2A]">
+                <div className="flex items-center justify-between gap-3 border-t pt-3" style={{ borderColor: "#ECE9E0" }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-bold text-[#2C2C2A]">
                       €{(b.final_fare ?? b.estimated_fare ?? 0).toFixed(2)}
-                    </div>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <StatusPill status={b.status} />
-                      {b.payment_timing === "later" && (
-                        <span
-                          className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{
-                            background: b.balance_collected ? "#EAF3DE" : "#FAEEDA",
-                            color: b.balance_collected ? "#27500A" : "#633806",
-                          }}
-                        >
-                          <Wallet size={9} /> {b.balance_collected ? "Collected" : "Pay in taxi"}
-                        </span>
-                      )}
-                    </div>
+                    </span>
+                    {b.payment_timing === "later" && (
+                      <span
+                        className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                        style={{
+                          background: b.balance_collected ? "#EAF3DE" : "#FAEEDA",
+                          color: b.balance_collected ? "#27500A" : "#633806",
+                        }}
+                      >
+                        <Wallet size={9} /> {b.balance_collected ? "Collected" : "Pay in taxi"}
+                      </span>
+                    )}
                   </div>
-                  <ChevronRight size={16} className="text-[#B4B2A9]" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "#F7F7F5" }}>
+                    <ChevronRight size={15} className="text-[#B4B2A9]" />
+                  </div>
                 </div>
               </div>
                     {(() => {
