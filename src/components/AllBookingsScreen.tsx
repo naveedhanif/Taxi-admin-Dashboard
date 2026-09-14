@@ -30,6 +30,10 @@ export interface Booking {
   estimated_duration_minutes: number | null;
   tip_amount: number | null;
   distance_km: number | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  dropoff_lat: number | null;
+  dropoff_lng: number | null;
 }
 
 function useGoogleFont() {
@@ -114,6 +118,15 @@ function formatTime(iso: string) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// Real Google Maps turn-by-turn navigation — opens the native Google
+// Maps app on a phone if installed, otherwise Google Maps in the
+// browser. Prefers real lat/lng (precise); falls back to the address
+// string only if coordinates are missing for some reason.
+function googleMapsNavUrl(lat: number | null, lng: number | null, address: string) {
+  const destination = lat != null && lng != null ? `${lat},${lng}` : encodeURIComponent(address);
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
 }
 
 function formatDateTime(iso: string) {
@@ -346,7 +359,7 @@ export default function AllBookingsScreen({
       setErrorMessage("");
       const { data, error } = await supabase
         .from("bookings")
-        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival, estimated_duration_minutes, tip_amount, distance_km")
+        .select("id, customer_id, passenger_name, passenger_phone, pickup_address, dropoff_address, stops, scheduled_time, estimated_fare, final_fare, status, payment_timing, payment_method, deposit_amount, deposit_payment_status, balance_due, balance_collected, driver_viewed_at, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival, estimated_duration_minutes, tip_amount, distance_km, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng")
         .eq("driver_id", driverId)
         // Exclude bookings the passenger hasn't actually paid for yet —
         // a booking sits in "awaiting_payment" between PaymentIntent
@@ -827,22 +840,24 @@ export default function AllBookingsScreen({
           side-effect of tapping a single day on the week-strip below. */}
       {dateFilter === "custom" && showCustomRangePanel && (
         <div className="mb-6 flex flex-col gap-3 rounded-xl border border-[#E4E2DA] bg-white p-4 sm:flex-row sm:items-end">
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
             <input
               type="date"
               value={customStartDate}
               onChange={(e) => setCustomStartDate(e.target.value)}
               className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+              style={{ boxSizing: "border-box" }}
             />
           </div>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">To</label>
             <input
               type="date"
               value={customEndDate}
               onChange={(e) => setCustomEndDate(e.target.value)}
               className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+              style={{ boxSizing: "border-box" }}
             />
           </div>
           <div className="flex shrink-0 gap-2">
@@ -1409,6 +1424,33 @@ export default function AllBookingsScreen({
                         {isBusy ? "Updating…" : nextStage.actionLabel}
                       </button>
                     ) : null}
+
+                    {/* Real Google Maps navigation — to the pickup while
+                        heading there, to the destination once the
+                        passenger's actually in the car. Opens the
+                        native Maps app on a phone if installed. */}
+                    {selectedBooking.status === "en_route" && (
+                      <a
+                        href={googleMapsNavUrl(selectedBooking.pickup_lat, selectedBooking.pickup_lng, selectedBooking.pickup_address)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold cursor-pointer"
+                        style={{ background: "#F1EFE8", color: "#2C2C2A" }}
+                      >
+                        <Navigation size={15} /> Route to pickup
+                      </a>
+                    )}
+                    {(selectedBooking.status === "arrived" || selectedBooking.status === "in_progress") && (
+                      <a
+                        href={googleMapsNavUrl(selectedBooking.dropoff_lat, selectedBooking.dropoff_lng, selectedBooking.dropoff_address)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold cursor-pointer"
+                        style={{ background: "#F1EFE8", color: "#2C2C2A" }}
+                      >
+                        <Navigation size={15} /> Route to destination
+                      </a>
+                    )}
 
                     {/* De-emphasized, not hidden — a driver genuinely mid-
                         trip may still need to cancel for a real reason
