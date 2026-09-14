@@ -473,6 +473,14 @@ export default function AllBookingsScreen({
   // The 7-day window's start date — navigable via prev/next, not fixed
   // to "today onward". History defaults to the past week (completed
   // trips are behind you, not ahead), Bookings keeps looking forward.
+  // Controls the custom-range panel's visibility explicitly — separate
+  // from dateFilter itself. Previously the panel auto-opened any time
+  // dateFilter became "custom", which included the week-strip's own
+  // single-day tap — meaning tapping one day on the calendar
+  // unexpectedly popped open the whole range editor too. Now the panel
+  // only opens when the driver explicitly asks for it.
+  const [showCustomRangePanel, setShowCustomRangePanel] = useState(false);
+
   const [weekWindowStart, setWeekWindowStart] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -746,7 +754,14 @@ export default function AllBookingsScreen({
         <div className="relative">
           <select
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setDateFilter(val);
+              // Only an explicit "Custom range…" selection opens the
+              // panel — picking any other preset (Today, This Week,
+              // etc.) closes it, since it's no longer relevant.
+              setShowCustomRangePanel(val === "custom");
+            }}
             className="emboss-input w-full rounded-xl px-3.5 py-2.5 pr-8 text-xs font-medium text-[#2C2C2A] appearance-none"
           >
             {DATE_FILTER_OPTIONS.map((opt) => (
@@ -755,7 +770,21 @@ export default function AllBookingsScreen({
               </option>
             ))}
           </select>
-          <Calendar size={14} className="absolute right-3.5 top-3.5 text-[#5F5E5A] pointer-events-none" />
+          <button
+            type="button"
+            onClick={() => {
+              setShowCustomRangePanel((v) => {
+                const next = !v;
+                if (next) setDateFilter("custom");
+                return next;
+              });
+            }}
+            className="absolute right-2.5 top-2 flex h-6 w-6 items-center justify-center rounded-md"
+            style={{ background: dateFilter === "custom" ? "#E6F1FB" : "transparent" }}
+            aria-label="Toggle custom date range"
+          >
+            <Calendar size={14} style={{ color: dateFilter === "custom" ? "#185FA5" : "#5F5E5A" }} />
+          </button>
         </div>
       </div>
 
@@ -793,10 +822,10 @@ export default function AllBookingsScreen({
       )}
 
 
-      {/* Custom range inputs — only shown once "Custom range…" is picked
-          above, rather than always taking up space for a filter most
-          drivers won't use most of the time. */}
-      {dateFilter === "custom" && (
+      {/* Custom range panel — only shown when explicitly opened via the
+          calendar icon or the "Custom range…" preset, never as a
+          side-effect of tapping a single day on the week-strip below. */}
+      {dateFilter === "custom" && showCustomRangePanel && (
         <div className="mb-6 flex flex-col gap-3 rounded-xl border border-[#E4E2DA] bg-white p-4 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
@@ -816,17 +845,25 @@ export default function AllBookingsScreen({
               className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
             />
           </div>
-          {(customStartDate || customEndDate) && (
+          <div className="flex shrink-0 gap-2">
+            {(customStartDate || customEndDate) && (
+              <button
+                onClick={() => {
+                  setCustomStartDate("");
+                  setCustomEndDate("");
+                }}
+                className="emboss-btn rounded-lg px-4 py-2 text-xs font-medium text-[#5F5E5A] cursor-pointer"
+              >
+                Clear dates
+              </button>
+            )}
             <button
-              onClick={() => {
-                setCustomStartDate("");
-                setCustomEndDate("");
-              }}
-              className="emboss-btn shrink-0 rounded-lg px-4 py-2 text-xs font-medium text-[#5F5E5A] cursor-pointer"
+              onClick={() => setShowCustomRangePanel(false)}
+              className="emboss-btn-primary rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer"
             >
-              Clear dates
+              Done
             </button>
-          )}
+          </div>
         </div>
       )}
 
