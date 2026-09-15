@@ -82,6 +82,11 @@ export default function App() {
   // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Lifted from AllBookingsScreen specifically so the bottom nav bar
+  // can hide itself while chat is open — both are fixed-position
+  // elements competing for the same strip of screen, which was making
+  // the chat's own input unreachable underneath the nav bar.
+  const [chatOpen, setChatOpen] = useState(false);
   // Purely for the debug badge below to display an honest, in-sync
   // value — pushState() doesn't itself trigger a React re-render, so
   // the debug badge reading window.location.pathname directly at
@@ -576,9 +581,10 @@ export default function App() {
                   openBookingId={openBookingId}
                   onOpenBookingHandled={() => setOpenBookingId(null)}
                   mode="upcoming"
+                  onChatOpenChange={setChatOpen}
                 />
               )}
-              {dashboardScreen === "history" && <AllBookingsScreen driverId={driverId} mode="history" />}
+              {dashboardScreen === "history" && <AllBookingsScreen driverId={driverId} mode="history" onChatOpenChange={setChatOpen} />}
               {dashboardScreen === "settings" && <SettingsScreen driverId={driverId} />}
               {dashboardScreen === "earnings" && <EarningsScreen driverId={driverId} />}
               {dashboardScreen === "customers" && <CustomersScreen driverId={driverId} />}
@@ -594,12 +600,16 @@ export default function App() {
           the sidebar's own badge uses, not a new invented counter.
           The center "+" quick-add button was removed — it just
           duplicated the Bookings screen's own "Add booking" action
-          and wasn't earning its place as a dedicated slot. */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
-        style={{ background: "white", borderColor: "#ECE9E0", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
-      >
-        {[
+          and wasn't earning its place as a dedicated slot. Hidden
+          entirely while chat is open — both are fixed to the bottom
+          of the screen, and the nav was sitting on top of the chat's
+          own input, making it unreachable. */}
+      {!chatOpen && (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
+          style={{ background: "white", borderColor: "#ECE9E0", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+        >
+          {[
           { id: "overview", label: "Home", icon: Home },
           { id: "bookings", label: "Bookings", icon: Calendar, badge: unviewedCount },
           { id: "history", label: "History", icon: HistoryIcon },
@@ -628,7 +638,8 @@ export default function App() {
             </button>
           );
         })}
-      </nav>
+        </nav>
+      )}
 
       {/* DebugBadge removed — it was explicitly marked "temporary,
           remove once the screen-persistence bug is confirmed fixed" and

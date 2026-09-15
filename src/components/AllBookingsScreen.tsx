@@ -191,6 +191,7 @@ export default function AllBookingsScreen({
   openBookingId,
   onOpenBookingHandled,
   mode = "upcoming",
+  onChatOpenChange,
 }: {
   driverId: string | null;
   openBookingId?: string | null;
@@ -199,6 +200,7 @@ export default function AllBookingsScreen({
   // trips — those live on the separate History screen ("history" mode)
   // instead, which only ever shows completed/canceled.
   mode?: "upcoming" | "history";
+  onChatOpenChange?: (open: boolean) => void;
 }) {
   useGoogleFont();
   const [bookingsList, setBookingsList] = useState<Booking[]>([]);
@@ -266,6 +268,14 @@ export default function AllBookingsScreen({
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const chatOpenRef = useRef(chatOpen);
   chatOpenRef.current = chatOpen;
+
+  useEffect(() => {
+    onChatOpenChange?.(chatOpen);
+    // If this screen unmounts entirely while chat happens to be open,
+    // make sure the parent's nav-hiding state doesn't stay stuck.
+    return () => onChatOpenChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatOpen]);
 
   useEffect(() => {
     setChatOpen(false);
