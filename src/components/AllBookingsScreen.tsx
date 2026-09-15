@@ -849,28 +849,48 @@ export default function AllBookingsScreen({
           calendar icon or the "Custom range…" preset, never as a
           side-effect of tapping a single day on the week-strip below. */}
       {dateFilter === "custom" && showCustomRangePanel && (
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-[#E4E2DA] bg-white p-4 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
-            <input
-              type="date"
-              value={customStartDate}
-              onChange={(e) => setCustomStartDate(e.target.value)}
-              className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-              style={{ boxSizing: "border-box" }}
-            />
+        <div
+          className="mb-6 rounded-xl border border-[#E4E2DA] bg-white p-4"
+          style={{ overflow: "hidden", width: "100%", boxSizing: "border-box" }}
+        >
+          {/* Grid, not flex — this exact card has now had two failed
+              flex-based overflow fixes (min-w-0, box-sizing on the
+              inputs alone). Grid columns have fundamentally more
+              predictable sizing: each column gets exactly its share,
+              with no flex-shrink ambiguity to get wrong a third time.
+              overflow:hidden on the card above is a hard backstop
+              regardless of any remaining computation quirk. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          >
+            <div style={{ minWidth: 0, width: "100%", boxSizing: "border-box" }}>
+              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
+              />
+            </div>
+            <div style={{ minWidth: 0, width: "100%", boxSizing: "border-box" }}>
+              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">To</label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
+              />
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">To</label>
-            <input
-              type="date"
-              value={customEndDate}
-              onChange={(e) => setCustomEndDate(e.target.value)}
-              className="emboss-input w-full rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-              style={{ boxSizing: "border-box" }}
-            />
-          </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {(customStartDate || customEndDate) && (
               <button
                 onClick={() => {

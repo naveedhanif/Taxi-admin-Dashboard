@@ -5,6 +5,13 @@ One of three apps sharing a single Supabase backend (project ref `xigqjacbhvrvpq
 ## Stack
 Vite + React 19 + TypeScript + Tailwind v4 (`@tailwindcss/vite`, no separate config file — see `src/index.css`). Deployed on Vercel. Client-side routing via `window.history.pushState`, not a router library — see `SCREEN_PATHS`/`screenFromPath` in `App.tsx`.
 
+## Regression watchlist — verified fixed, check before touching nearby code
+These have each broken, or needed multiple attempts to actually fix. Before editing anything in this area, re-read this first.
+
+- **The custom date-range panel (Bookings/History screens) uses CSS Grid for its From/To layout, deliberately, not Flexbox.** Two separate Flexbox-based fixes (`min-w-0`, explicit `box-sizing`) failed to stop the date inputs overflowing their card on mobile before this was rebuilt on Grid, which has fundamentally more predictable column sizing. The card also has an explicit `overflow: hidden` as a hard backstop. **Do not revert this section to `flex`** without a real reason and re-testing on an actual phone — this exact spot has a track record of silently reintroducing the same bug in a slightly different form.
+- **The chat bottom-sheet's nav-hiding**: `chatOpen` state is lifted from `AllBookingsScreen` up to `App.tsx` via `onChatOpenChange`, specifically so the bottom nav bar can hide itself — both are `position: fixed` at the bottom of the screen and will otherwise cover each other. If a new fixed-bottom element is ever added, check whether it needs the same treatment.
+
+
 ## Design system
 Light/cream theme (`#F7F7F5` background), "embossed" soft-shadow buttons (`.emboss-btn`/`.emboss-btn-primary`), Space Grotesk headings + Inter body, blue accent `#185FA5`. This app does NOT have the dark-theme toggle system — that's passenger-only so far (see that repo's CLAUDE.md).
 
