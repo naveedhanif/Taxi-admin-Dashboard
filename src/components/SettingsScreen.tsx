@@ -7,6 +7,7 @@ import LicenceScreen from "./LicenceScreen";
 import BusinessProfileScreen from "./BusinessProfileScreen";
 import ScheduleScreen from "./ScheduleScreen";
 import ReviewsScreen from "./ReviewsScreen";
+import PoolJobsToggle from "./PoolJobsToggle";
 
 // Customers (customer ledger + promo codes) moved out of here and into
 // its own top-level sidebar item in App.tsx — it's frequently-used
@@ -36,6 +37,8 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
         </h1>
         <p className="text-sm text-[#5F5E5A]">Vehicle details, fare rules & passenger discounts, and payment setup</p>
       </div>
+
+      <PoolJobsToggle driverId={driverId} />
 
       {/* Sub-tabs — a second-level nav within Settings, distinct from the
           main sidebar. A single scrollable row of tabs rather than a
