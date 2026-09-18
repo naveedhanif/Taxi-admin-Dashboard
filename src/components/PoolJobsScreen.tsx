@@ -37,6 +37,13 @@ export default function PoolJobsScreen({ driverId }: { driverId: string | null }
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [takenNotice, setTakenNotice] = useState<string | null>(null);
+  // Set from the notification URL (?job=...) — the specific job this
+  // driver tapped a notification for, scrolled to and briefly
+  // highlighted once the list loads, rather than making them hunt for
+  // it among whatever else is waiting.
+  const [highlightedJobId, setHighlightedJobId] = useState<string | null>(() => {
+    return new URLSearchParams(window.location.search).get("job");
+  });
 
   const load = useCallback(async () => {
     const result = await authedFetch("list-pool-jobs", {});
@@ -59,6 +66,18 @@ export default function PoolJobsScreen({ driverId }: { driverId: string | null }
       supabase.removeChannel(channel);
     };
   }, [load]);
+
+  useEffect(() => {
+    if (!highlightedJobId || jobs.length === 0) return;
+    const el = document.getElementById(`pool-job-${highlightedJobId}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Clean the URL so refreshing the page later doesn't re-trigger
+    // the highlight, and clear the highlight itself after a few
+    // seconds so it doesn't linger indefinitely.
+    window.history.replaceState(null, "", "/pool-jobs");
+    const timeout = setTimeout(() => setHighlightedJobId(null), 4000);
+    return () => clearTimeout(timeout);
+  }, [highlightedJobId, jobs]);
 
   async function handleClaim(jobId: string) {
     setClaimingId(jobId);
@@ -112,8 +131,19 @@ export default function PoolJobsScreen({ driverId }: { driverId: string | null }
         </div>
       ) : (
         <div className="space-y-3">
-          {jobs.map((job) => (
-            <div key={job.id} className="rounded-xl border border-[#E4E2DA] bg-white p-4">
+          {jobs.map((job) => {
+            const isHighlighted = job.id === highlightedJobId;
+            return (
+            <div
+              key={job.id}
+              id={`pool-job-${job.id}`}
+              className="rounded-xl border p-4 transition-all duration-500"
+              style={{
+                borderColor: isHighlighted ? "#185FA5" : "#E4E2DA",
+                background: isHighlighted ? "#E6F1FB" : "white",
+                boxShadow: isHighlighted ? "0 0 0 3px rgba(24,95,165,0.15)" : "none",
+              }}
+            >
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
                   <div className="rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
@@ -160,7 +190,8 @@ export default function PoolJobsScreen({ driverId }: { driverId: string | null }
                 {claimingId === job.id ? "Claiming…" : "Accept this job"}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
