@@ -208,6 +208,7 @@ export default function AllBookingsScreen({
   onOpenBookingHandled,
   mode = "upcoming",
   onChatOpenChange,
+  onBookingsViewed,
 }: {
   driverId: string | null;
   openBookingId?: string | null;
@@ -217,6 +218,12 @@ export default function AllBookingsScreen({
   // instead, which only ever shows completed/canceled.
   mode?: "upcoming" | "history";
   onChatOpenChange?: (open: boolean) => void;
+  // Called once the driver has genuinely seen the Bookings list, so the
+  // sidebar/bottom-nav badge and the real OS app-icon badge (both
+  // driven by the same unviewedCount in App.tsx) can clear immediately
+  // — opening the list itself is now what counts as "viewed," not
+  // needing to tap into each individual booking.
+  onBookingsViewed?: () => void;
 }) {
   useGoogleFont();
   const [bookingsList, setBookingsList] = useState<Booking[]>([]);
@@ -303,6 +310,29 @@ export default function AllBookingsScreen({
     setChatOpen(false);
     setHasUnreadChat(false);
   }, [selectedBooking?.id]);
+
+  // Opening the Bookings list itself now counts as "seen" — the driver
+  // asked for this explicitly: the badge (both the in-app one and the
+  // real OS app-icon badge, both driven by the same underlying count)
+  // should clear as soon as they've looked at the list, not require
+  // tapping into every individual booking first.
+  useEffect(() => {
+    if (mode !== "upcoming" || !driverId) return;
+    (async () => {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ driver_viewed_at: new Date().toISOString() })
+        .eq("driver_id", driverId)
+        .in("status", ["pending", "confirmed", "en_route", "arrived", "in_progress"])
+        .is("driver_viewed_at", null);
+      if (!error) onBookingsViewed?.();
+    })();
+    // Deliberately once per mount (opening this screen), not on every
+    // re-render — re-running on every bookingsList change would defeat
+    // the point by immediately re-marking a booking that just became
+    // newly unviewed a second ago.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, driverId]);
   // Replaces window.confirm for cancelling — a native browser confirm
   // dialog is too easy to blow through without reading, especially
   // risky once a driver is already mid-trip and a passenger is

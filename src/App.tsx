@@ -216,7 +216,7 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const { notifications, dismiss, unviewedCount, audioRef } = useNewBookingNotifications(driverId);
+  const { notifications, dismiss, unviewedCount, audioRef, refreshUnviewedCount } = useNewBookingNotifications(driverId);
 
   // Unlocks audio playback for mobile browsers. Most mobile browsers
   // (iOS Safari in particular) block .play() calls that don't trace
@@ -582,7 +582,7 @@ export default function App() {
                             }`}
                             style={{ background: "#D64545", boxShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
                           >
-                            {unviewedCount > 99 ? "99+" : unviewedCount}
+                            {unviewedCount}
                           </span>
                         )}
                       </button>
@@ -608,6 +608,7 @@ export default function App() {
                   onOpenBookingHandled={() => setOpenBookingId(null)}
                   mode="upcoming"
                   onChatOpenChange={setChatOpen}
+                  onBookingsViewed={refreshUnviewedCount}
                 />
               )}
               {dashboardScreen === "history" && <AllBookingsScreen driverId={driverId} mode="history" onChatOpenChange={setChatOpen} />}
@@ -659,7 +660,7 @@ export default function App() {
                   className="absolute right-1/2 top-0 flex h-4 min-w-[16px] translate-x-3 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
                   style={{ background: "#185FA5" }}
                 >
-                  {item.badge > 9 ? "9+" : item.badge}
+                  {item.badge}
                 </span>
               )}
             </button>
