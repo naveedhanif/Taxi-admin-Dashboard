@@ -36,7 +36,17 @@ self.addEventListener("notificationclick", (event) => {
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
-          if ("navigate" in client) client.navigate(targetUrl).catch(() => {});
+          // WindowClient.navigate() on an already-open tab is known to
+          // be unreliable specifically on iOS Safari PWAs — it can
+          // silently fail, after which the old code still focused the
+          // window anyway, landing on whatever screen was already
+          // open (almost always the dashboard). postMessage instead:
+          // the already-running React app listens for this and
+          // navigates itself directly, which doesn't depend on that
+          // browser API working at all.
+          if ("postMessage" in client) {
+            client.postMessage({ type: "NOTIFICATION_NAVIGATE", url: targetUrl });
+          }
           return client.focus();
         }
       }

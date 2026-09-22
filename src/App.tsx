@@ -131,6 +131,28 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  // Notification taps, when this app is already open in the
+  // background, arrive here — not through a page navigation at all.
+  // The service worker deliberately does NOT rely on
+  // WindowClient.navigate() (unreliable on iOS Safari PWAs, and was
+  // the real reason notifications kept opening the dashboard
+  // regardless of which one was tapped); instead it postMessages the
+  // target URL to this already-running app, which navigates itself
+  // directly — reliable because it's just normal JS execution, not a
+  // browser API with inconsistent support.
+  useEffect(() => {
+    function handleServiceWorkerMessage(event: MessageEvent) {
+      if (event.data?.type === "NOTIFICATION_NAVIGATE" && event.data.url) {
+        const url = new URL(event.data.url, window.location.origin);
+        window.history.pushState(null, "", url.pathname + url.search);
+        setCurrentPath(url.pathname);
+        setDashboardScreen(screenFromPath(url.pathname));
+      }
+    }
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
+  }, []);
+
   // Real session tracking. onAuthStateChange fires immediately with the
   // current session on load, then again on every sign-in/sign-out — this
   // is the one source of truth for "who's logged in right now."
