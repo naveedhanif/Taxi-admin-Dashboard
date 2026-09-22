@@ -215,6 +215,12 @@ export default function AllBookingsScreen({
   // its filter reset to defaults every time. Lazy-initialized from
   // localStorage so a fresh reload restores the actual filter/search/
   // sort instead of defaulting back to "all".
+  // Pending Requests / Confirmed tabs — upcoming mode only, separate
+  // from the existing status dropdown so both can be used together
+  // (e.g. "Confirmed" tab + "Tips" search) rather than one replacing
+  // the other.
+  const [upcomingTab, setUpcomingTab] = useState<"pending" | "confirmed">("confirmed");
+
   const [filterStatus, setFilterStatus] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(`taxi_admin_bookings_filter_${driverId}`);
@@ -490,6 +496,12 @@ export default function AllBookingsScreen({
       completed: base.filter((b) => b.status === "completed").length,
       canceled: base.filter((b) => b.status === "canceled").length,
       tipped: base.filter((b) => Number(b.tip_amount) > 0).length,
+      pending: base.filter((b) => b.status === "pending").length,
+      // "Confirmed" here means genuinely active/underway too, not just
+      // the literal "confirmed" status — a trip that's en route or
+      // already in progress is still a real, currently-committed job,
+      // same grouping the reference design implies.
+      confirmed: base.filter((b) => ["confirmed", "en_route", "arrived", "in_progress"].includes(b.status)).length,
     };
   })();
 
@@ -519,6 +531,11 @@ export default function AllBookingsScreen({
       const isHistoryStatus = b.status === "completed" || b.status === "canceled";
       if (mode === "history" && !isHistoryStatus) return false;
       if (mode === "upcoming" && isHistoryStatus) return false;
+      if (mode === "upcoming") {
+        const isConfirmedGroup = ["confirmed", "en_route", "arrived", "in_progress"].includes(b.status);
+        if (upcomingTab === "pending" && b.status !== "pending") return false;
+        if (upcomingTab === "confirmed" && !isConfirmedGroup) return false;
+      }
 
       const matchesStatus =
         filterStatus === "all"
@@ -540,6 +557,9 @@ export default function AllBookingsScreen({
       const timeB = new Date(b.scheduled_time).getTime();
       return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
     });
+
+  // Real fare total for whichever tab is active.
+  const activeTabFareTotal = filteredBookings.reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
 
   // Groups the already-sorted list by adjacent day label — a single
   // pass, not a full re-sort, so it naturally respects whichever sort
@@ -835,6 +855,37 @@ export default function AllBookingsScreen({
                 <span
                   className="rounded-full px-1.5 text-[10px]"
                   style={{ background: isSelected ? "rgba(255,255,255,0.25)" : "#F1EFE8", color: isSelected ? "white" : "#5F5E5A" }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {mode === "upcoming" && (
+        <div className="mb-6 flex gap-2">
+          {[
+            { value: "pending" as const, label: "Pending Requests", count: statusCounts.pending },
+            { value: "confirmed" as const, label: "Confirmed", count: statusCounts.confirmed },
+          ].map((tab) => {
+            const isSelected = upcomingTab === tab.value;
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setUpcomingTab(tab.value)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-semibold"
+                style={{
+                  background: isSelected ? "white" : "#F1EFE8",
+                  color: isSelected ? "#185FA5" : "#5F5E5A",
+                  boxShadow: isSelected ? "0 1px 4px rgba(44,44,42,0.12)" : "none",
+                }}
+              >
+                {tab.label}
+                <span
+                  className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                  style={{ background: tab.value === "pending" ? "#BA7517" : "#185FA5" }}
                 >
                   {tab.count}
                 </span>
@@ -1140,8 +1191,30 @@ export default function AllBookingsScreen({
                       )
                     )}
                   </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "#F7F7F5" }}>
-                    <ChevronRight size={15} className="text-[#B4B2A9]" />
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSelectBooking(b); }}
+                      className="rounded-lg px-3 py-2 text-xs font-medium"
+                      style={{ background: "#F1EFE8", color: "#2C2C2A" }}
+                    >
+                      Details
+                    </button>
+                    {["confirmed", "en_route", "arrived", "in_progress"].includes(b.status) && (
+                      <a
+                        href={
+                          b.status === "en_route"
+                            ? googleMapsNavUrl(b.pickup_lat, b.pickup_lng, b.pickup_address)
+                            : googleMapsNavUrl(b.dropoff_lat, b.dropoff_lng, b.dropoff_address)
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white"
+                        style={{ background: "#185FA5" }}
+                      >
+                        <Navigation size={13} /> Navigate
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
