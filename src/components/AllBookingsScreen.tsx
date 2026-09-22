@@ -129,6 +129,22 @@ function googleMapsNavUrl(lat: number | null, lng: number | null, address: strin
   return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
 }
 
+// target="_blank" inside a standalone (home-screen-installed) iOS PWA
+// is a well-documented source of the app's own tab going blank —
+// standalone mode has no real concept of a separate tab to open into,
+// so iOS can leave the originating WebView in a broken state instead.
+// A plain link with no target attribute lets iOS hand off to the Maps
+// app or Safari correctly without that side effect. Only relevant in
+// standalone mode specifically — a normal mobile browser tab handles
+// target="_blank" completely correctly, matching this codebase's
+// existing isIosNonStandalone() naming convention (see pushNotifications.ts).
+function isIosStandalone(): boolean {
+  const ua = window.navigator.userAgent.toLowerCase();
+  const isIos = /iphone|ipad|ipod/.test(ua);
+  const standalone = (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+  return isIos && standalone;
+}
+
 function formatDateTime(iso: string) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -763,6 +779,21 @@ export default function AllBookingsScreen({
           >
             <ArrowUpDown size={13} /> Sort: {sortOrder === "asc" ? "Earliest first" : "Latest first"}
           </button>
+          {mode === "upcoming" && (
+            <span className="text-xs text-[#8C8977]">
+              Timezone: Dublin (
+              {(() => {
+                // Computed live from the real current offset, not
+                // hardcoded — Dublin is GMT+1 (IST) in summer and GMT+0
+                // in winter, so a fixed string would be wrong half the year.
+                const offset = new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", timeZoneName: "shortOffset" })
+                  .formatToParts(new Date())
+                  .find((p) => p.type === "timeZoneName")?.value;
+                return offset?.replace("GMT", "GMT") ?? "GMT";
+              })()}
+              )
+            </span>
+          )}
         </div>
       </div>
 
@@ -963,10 +994,12 @@ export default function AllBookingsScreen({
         </div>
       )}
 
-      {/* Week at a glance — a genuinely navigable 7-day window (prev/
-          next), not a fixed "today onward" snapshot. A dot means "at
-          least one real booking that day" — not a fabricated activity
-          indicator. */}
+      {/* Week at a glance — history mode only. This took up too much
+          space on the Bookings screen specifically and doesn't match
+          the reference design, which has no calendar grid at all —
+          just the compact date-range pill above. Still real and
+          useful on History, where it was actually requested. */}
+      {mode === "history" && (
       <div className="mb-6 rounded-2xl border border-[#E4E2DA] bg-white p-3">
         <div className="mb-2 flex items-center justify-between px-1">
           <button
@@ -1035,11 +1068,14 @@ export default function AllBookingsScreen({
           })}
         </div>
       </div>
+      )}
 
       {/* Summary bar — separate from the day cards below, since it's
           describing the whole filtered set, not any one day. */}
       <div className="mb-4 flex items-center justify-between text-xs text-[#5F5E5A]">
-        <span>Showing {filteredBookings.length} bookings</span>
+        <span>
+          Showing {filteredBookings.length} {mode === "upcoming" ? (upcomingTab === "pending" ? "pending request" : "confirmed booking") + (filteredBookings.length === 1 ? "" : "s") : "trips"}
+        </span>
         <span>
           Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong>
           {dateFilter !== "all" && (
@@ -1081,9 +1117,13 @@ export default function AllBookingsScreen({
                 {(() => {
                   const groupTotal = group.bookings.reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
                   const allFinal = group.bookings.every((b) => b.final_fare != null);
+                  const suffix =
+                    mode === "upcoming"
+                      ? upcomingTab === "confirmed" ? " confirmed" : " pending"
+                      : !allFinal ? " est." : "";
                   return (
                     <span className="font-normal normal-case text-[#B4B2A9]">
-                        {group.bookings.length} · €{groupTotal.toFixed(2)}{!allFinal && " est."}
+                        {group.bookings.length} · €{groupTotal.toFixed(2)}{suffix}
                       </span>
                     );
                   })()}
@@ -1206,8 +1246,7 @@ export default function AllBookingsScreen({
                             ? googleMapsNavUrl(b.pickup_lat, b.pickup_lng, b.pickup_address)
                             : googleMapsNavUrl(b.dropoff_lat, b.dropoff_lng, b.dropoff_address)
                         }
-                        target="_blank"
-                        rel="noreferrer"
+                        {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white"
                         style={{ background: "#185FA5" }}
@@ -1296,8 +1335,7 @@ export default function AllBookingsScreen({
                       </a>
                       <a
                         href={`https://wa.me/${links.whatsapp}`}
-                        target="_blank"
-                        rel="noreferrer"
+                        {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
                         className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-semibold text-white"
                         style={{ background: "#25D366", boxShadow: "3px 3px 7px rgba(37,211,102,0.35), -2px -2px 5px rgba(255,255,255,0.5)" }}
                       >
@@ -1535,8 +1573,7 @@ export default function AllBookingsScreen({
                     {selectedBooking.status === "en_route" && (
                       <a
                         href={googleMapsNavUrl(selectedBooking.pickup_lat, selectedBooking.pickup_lng, selectedBooking.pickup_address)}
-                        target="_blank"
-                        rel="noreferrer"
+                        {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
                         className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold cursor-pointer"
                         style={{ background: "#F1EFE8", color: "#2C2C2A" }}
                       >
@@ -1546,8 +1583,7 @@ export default function AllBookingsScreen({
                     {(selectedBooking.status === "arrived" || selectedBooking.status === "in_progress") && (
                       <a
                         href={googleMapsNavUrl(selectedBooking.dropoff_lat, selectedBooking.dropoff_lng, selectedBooking.dropoff_address)}
-                        target="_blank"
-                        rel="noreferrer"
+                        {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
                         className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold cursor-pointer"
                         style={{ background: "#F1EFE8", color: "#2C2C2A" }}
                       >
