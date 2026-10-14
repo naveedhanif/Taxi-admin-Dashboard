@@ -18,6 +18,7 @@ import PoolJobsScreen from "./components/PoolJobsScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
+import { enableDriverPush, isPushSupported } from "./pushNotifications";
 import { useLiveLocationSharing } from "./useLiveLocationSharing";
 import { supabase } from "./supabaseClient";
 import { getDriverForUser } from "./driverAuth";
@@ -148,6 +149,12 @@ export default function App() {
         window.history.pushState(null, "", url.pathname + url.search);
         setCurrentPath(url.pathname);
         setDashboardScreen(screenFromPath(url.pathname));
+        // A chat-message push points at /bookings?booking=<id>&open=chat
+        const bookingParam = url.searchParams.get("booking");
+        if (url.pathname.startsWith("/bookings") && bookingParam) {
+          setOpenChatWithBooking(url.searchParams.get("open") === "chat");
+          setOpenBookingId(bookingParam);
+        }
       }
     }
     navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
@@ -260,9 +267,51 @@ export default function App() {
   // this and opens the matching booking's detail modal, then clears it
   // via onOpenBookingHandled below.
   const [openBookingId, setOpenBookingId] = useState<string | null>(null);
+  const [openChatWithBooking, setOpenChatWithBooking] = useState(false);
+
+  // Cold start from a chat-message push (app was closed): the URL itself
+  // carries the booking, there is no already-running app to postMessage.
+  useEffect(() => {
+    if (!driverId) return;
+    const params = new URLSearchParams(window.location.search);
+    const bookingParam = params.get("booking");
+    if (window.location.pathname.startsWith("/bookings") && bookingParam) {
+      setOpenChatWithBooking(params.get("open") === "chat");
+      setOpenBookingId(bookingParam);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [driverId]);
+
+  // Register this device for push automatically once notification
+  // permission is granted. Previously the ONLY thing that saved a push
+  // subscription was a banner button on the Overview screen, and that
+  // banner only shows while permission is still "default" — but
+  // useNewBookingNotifications asks for permission at login, so the
+  // banner almost never appeared and no subscription was ever saved
+  // (new drivers had zero; the newest on file was weeks old). Safe to
+  // repeat on every launch: it reuses the existing subscription and the
+  // server upserts by endpoint, which also repairs a rotated endpoint.
+  useEffect(() => {
+    if (!driverId || !isPushSupported() || Notification.permission !== "granted") return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token || cancelled) {
+        if (!token) console.error("Push auto-register skipped: no session access token yet.");
+        return;
+      }
+      const result = await enableDriverPush(driverId, token);
+      if (!result.enabled) console.error("Push auto-register failed:", result.error);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [driverId]);
 
   function handleOpenBookingFromNotification(id: string) {
     setDashboardScreen("bookings");
+    setOpenChatWithBooking(false);
     setOpenBookingId(id);
     dismiss(id);
   }
@@ -637,7 +686,11 @@ export default function App() {
                 <AllBookingsScreen
                   driverId={driverId}
                   openBookingId={openBookingId}
-                  onOpenBookingHandled={() => setOpenBookingId(null)}
+                  onOpenBookingHandled={() => {
+                    setOpenBookingId(null);
+                    setOpenChatWithBooking(false);
+                  }}
+                  openChatWithBooking={openChatWithBooking}
                   mode="upcoming"
                   onChatOpenChange={setChatOpen}
                   onBookingsViewed={refreshUnviewedCount}
