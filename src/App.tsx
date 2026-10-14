@@ -18,6 +18,7 @@ import PoolJobsScreen from "./components/PoolJobsScreen";
 
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
+import { useLiveLocationSharing } from "./useLiveLocationSharing";
 import { supabase } from "./supabaseClient";
 import { getDriverForUser } from "./driverAuth";
 
@@ -217,6 +218,10 @@ export default function App() {
   }, []);
 
   const { notifications, dismiss, unviewedCount, audioRef, refreshUnviewedCount } = useNewBookingNotifications(driverId);
+
+  // Shares GPS with the passenger only while a booking is en_route or
+  // arrived; clears it the moment that's no longer true.
+  const { state: locationShareState } = useLiveLocationSharing(driverId);
 
   // Unlocks audio playback for mobile browsers. Most mobile browsers
   // (iOS Safari in particular) block .play() calls that don't trace
@@ -594,6 +599,33 @@ export default function App() {
           )}
 
           <main className="min-w-0 flex-1 py-4 pb-24 sm:py-6 sm:pb-6">
+            {locationShareState !== "idle" && (
+              <div className="mb-3 px-3 sm:px-6">
+                <div
+                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium"
+                  style={
+                    locationShareState === "active"
+                      ? { background: "#EAF3DE", color: "#27500A" }
+                      : locationShareState === "waiting"
+                      ? { background: "#E6F1FB", color: "#0C447C" }
+                      : { background: "#FCEBEB", color: "#791F1F" }
+                  }
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{
+                      background:
+                        locationShareState === "active" ? "#639922" : locationShareState === "waiting" ? "#378ADD" : "#A32D2D",
+                    }}
+                  />
+                  {locationShareState === "active" && "Sharing your live location with the passenger"}
+                  {locationShareState === "waiting" && "Finding your location…"}
+                  {locationShareState === "denied" &&
+                    "Location is blocked — the passenger can't see you. Allow location for this app in your phone settings."}
+                  {locationShareState === "unavailable" && "This device can't share location."}
+                </div>
+              </div>
+            )}
             <div className="px-3 sm:px-6">
               {dashboardScreen === "overview" && <OverviewDashboard driverId={driverId} onNavigate={(s) => setDashboardScreen(s as any)} />}
               {dashboardScreen === "login" && (
