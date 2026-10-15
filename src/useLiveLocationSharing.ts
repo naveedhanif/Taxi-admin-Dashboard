@@ -41,6 +41,7 @@ export function useLiveLocationSharing(driverId: string | null) {
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [state, setState] = useState<LocationShareState>("idle");
   const lastSentRef = useRef(0);
+  const [retryTick, setRetryTick] = useState(0);
 
   // 1) Work out which booking (if any) currently needs tracking.
   useEffect(() => {
@@ -140,7 +141,11 @@ export function useLiveLocationSharing(driverId: string | null) {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [driverId, bookingId]);
+  }, [driverId, bookingId, retryTick]);
 
-  return { state, bookingId };
+  // Lets the driver re-ask after fixing the phone setting — iOS home-screen
+  // apps only re-evaluate permission when a new GPS request is made.
+  const retry = () => setRetryTick((n) => n + 1);
+
+  return { state, bookingId, retry };
 }

@@ -1163,75 +1163,52 @@ export default function AllBookingsScreen({
       ) : (
         <div className="space-y-4">
           {groupedBookings.map((group) => (
-            <div key={group.label} className="rounded-xl border border-[#E4E2DA] bg-white p-5">
-              <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#8C8977]">
-                {group.label}
-                <span className="h-px flex-1" style={{ background: "#ECE9E0" }} />
+            <div key={group.label}>
+              <div className="mb-1 flex items-baseline justify-between px-1">
+                <h2 className="text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>{group.label}</h2>
                 {(() => {
                   const groupTotal = group.bookings.reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
                   const allFinal = group.bookings.every((b) => b.final_fare != null);
-                  const suffix =
-                    mode === "upcoming"
-                      ? upcomingTab === "confirmed" ? " confirmed" : " pending"
-                      : !allFinal ? " est." : "";
                   return (
-                    <span className="font-normal normal-case text-[#B4B2A9]">
-                        {group.bookings.length} · €{groupTotal.toFixed(2)}{suffix}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <div className="space-y-3">
+                    <span className="text-xs text-[#8C8977]">
+                      {group.bookings.length} · €{groupTotal.toFixed(2)}{!allFinal ? " est." : ""}
+                    </span>
+                  );
+                })()}
+              </div>
+                <div className="rounded-2xl border border-[#E4E2DA] bg-white px-4">
                   {group.bookings.map((b, idx) => (
                     <Fragment key={b.id}>
               <div
                 key={b.id}
                 onClick={() => handleSelectBooking(b)}
-                className="emboss-btn cursor-pointer rounded-xl p-4 transition-all"
+                className="cursor-pointer py-5"
+                style={idx > 0 ? { borderTop: "1px solid #ECE9E0" } : undefined}
               >
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="shrink-0 rounded-md bg-[#F1EFE8] px-2.5 py-1.5 text-center text-xs font-semibold text-[#2C2C2A]">
-                      <div className="flex items-center gap-1">
-                        <Clock size={11} className="text-[#5F5E5A]" />
-                        <span>{formatTime(b.scheduled_time)}</span>
-                      </div>
-                    </div>
-                    <div className="min-w-0 truncate">
-                      <span className="text-sm font-semibold text-[#2C2C2A]">{b.passenger_name}</span>
-                      <span className="ml-1.5 text-[11px] font-mono text-[#B4B2A9]">#{b.id.slice(0, 8)}</span>
-                      {/* Duration/distance — real numbers from the original
-                          route calculation, not a GPS-verified actual
-                          drive (this app doesn't track that), shown only
-                          on History since it's most meaningful for a
-                          trip that's already happened. */}
-                      {mode === "history" && (b.estimated_duration_minutes || b.distance_km) && (
-                        <div className="text-[11px] text-[#8C8977]">
-                          {b.estimated_duration_minutes ? `${Math.round(b.estimated_duration_minutes)} mins` : ""}
-                          {b.estimated_duration_minutes && b.distance_km ? " · " : ""}
-                          {b.distance_km ? `${Number(b.distance_km).toFixed(1)} km` : ""}
-                        </div>
-                      )}
-                    </div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>{formatTime(b.scheduled_time)}</span>
+                    <span className="h-6 w-px" style={{ background: "#D8D5CB" }} />
+                    <span className="text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+                      €{Number(b.final_fare ?? b.estimated_fare ?? 0).toFixed(2)}
+                    </span>
                   </div>
                   <StatusPill status={b.status} />
                 </div>
+                <div className="mb-3 text-[11px] text-[#8C8977]">
+                  {b.passenger_name}
+                  {b.estimated_duration_minutes ? ` · ${Math.round(b.estimated_duration_minutes)} mins` : ""}
+                  {b.distance_km ? ` · ${Number(b.distance_km).toFixed(1)} km` : ""}
+                </div>
 
-                {/* Route — stacked pickup/dropoff with a connecting line,
-                    matching the reference layout, instead of the
-                    previous single truncated pickup → dropoff line. */}
-                <div className="mb-3 flex gap-2.5 pl-0.5">
-                  <div className="flex flex-col items-center pt-1">
-                    <Circle size={9} fill="#639922" stroke="none" />
-                    <div
-                      className="my-0.5 w-px flex-1"
-                      style={{ background: "#D8D5CB", minHeight: 16, borderLeft: b.status === "canceled" ? "1px dashed #D8D5CB" : "none" }}
-                    />
+                <div className="mb-4 flex gap-3 pl-0.5">
+                  <div className="flex flex-col items-center pt-1.5">
+                    <Circle size={9} fill="#2C2C2A" stroke="none" />
+                    <div className="my-0.5 w-0.5 flex-1" style={{ background: "#D8D5CB", minHeight: 22 }} />
                     <Circle size={9} fill={b.status === "canceled" ? "#D8D5CB" : "#185FA5"} stroke="none" />
                   </div>
-                  <div className="flex-1 space-y-2.5 text-xs text-[#2C2C2A]">
+                  <div className="flex-1 space-y-3 text-base text-[#5F5E5A]">
                     <div>
-                      {mode === "history" && <span className="mr-1.5 font-mono text-[11px] text-[#8C8977]">{formatTime(b.scheduled_time)}</span>}
                       {b.pickup_address}
                       {b.flight_number && <span className="ml-1.5 text-[11px] text-[#8C8977]">· Flight {b.flight_number}</span>}
                     </div>
@@ -1241,73 +1218,64 @@ export default function AllBookingsScreen({
                       </span>
                     )}
                     <div style={b.status === "canceled" ? { color: "#B4B2A9" } : undefined}>
-                      {mode === "history" && b.status !== "canceled" && b.estimated_duration_minutes && (
-                        <span className="mr-1.5 font-mono text-[11px] text-[#8C8977]">
-                          {formatTime(new Date(new Date(b.scheduled_time).getTime() + b.estimated_duration_minutes * 60000).toISOString())}
-                        </span>
-                      )}
                       {b.dropoff_address}
                       {b.status === "canceled" && <span className="ml-1.5 text-[11px]">(not reached)</span>}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 border-t pt-3" style={{ borderColor: "#ECE9E0" }}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-base font-bold text-[#2C2C2A]">
-                      €{(b.final_fare ?? b.estimated_fare ?? 0).toFixed(2)}
-                    </span>
-                    {/* Real tip data — bookings.tip_amount, set once a
-                        passenger actually pays one via Stripe. Never
-                        shown as a fabricated "vehicle class" style tag —
-                        this app has no such concept. */}
-                    {Number(b.tip_amount) > 0 && (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "#EAF3DE", color: "#27500A" }}>
-                        +€{Number(b.tip_amount).toFixed(2)} tip
-                      </span>
-                    )}
-                    {b.status === "canceled" && b.deposit_payment_status === "paid" ? (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
-                        Deposit kept: €{Number(b.deposit_amount ?? 0).toFixed(2)}
-                      </span>
-                    ) : (
-                      b.payment_timing === "later" && (
-                        <span
-                          className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{
-                            background: b.balance_collected ? "#EAF3DE" : "#FAEEDA",
-                            color: b.balance_collected ? "#27500A" : "#633806",
-                          }}
-                        >
-                          <Wallet size={9} /> {b.balance_collected ? "Collected" : "Pay in taxi"}
-                        </span>
-                      )
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  {b.status === "pending" && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleSelectBooking(b); }}
-                      className="rounded-lg px-3 py-2 text-xs font-medium"
-                      style={{ background: "#F1EFE8", color: "#2C2C2A" }}
+                      onClick={(e) => { e.stopPropagation(); updateBookingStatus(b.id, "confirmed"); }}
+                      disabled={updatingId === b.id}
+                      className="flex items-center gap-1.5 rounded-full px-6 py-3 text-base font-semibold text-white disabled:opacity-60"
+                      style={{ background: "#185FA5" }}
                     >
-                      Details
+                      {updatingId === b.id && <Loader2 size={14} className="animate-spin" />} Accept
                     </button>
-                    {["confirmed", "en_route", "arrived", "in_progress"].includes(b.status) && (
-                      <a
-                        href={
-                          b.status === "en_route"
-                            ? googleMapsNavUrl(b.pickup_lat, b.pickup_lng, b.pickup_address)
-                            : googleMapsNavUrl(b.dropoff_lat, b.dropoff_lng, b.dropoff_address)
-                        }
-                        {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white"
-                        style={{ background: "#185FA5" }}
+                  )}
+                  {["confirmed", "en_route", "arrived", "in_progress"].includes(b.status) && (
+                    <a
+                      href={
+                        b.status === "en_route"
+                          ? googleMapsNavUrl(b.pickup_lat, b.pickup_lng, b.pickup_address)
+                          : googleMapsNavUrl(b.dropoff_lat, b.dropoff_lng, b.dropoff_address)
+                      }
+                      {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1.5 rounded-full px-6 py-3 text-base font-semibold text-white"
+                      style={{ background: "#185FA5" }}
+                    >
+                      <Navigation size={15} /> Navigate
+                    </a>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleSelectBooking(b); }}
+                    className="rounded-full px-6 py-3 text-base font-semibold"
+                    style={{ background: "#F1EFE8", color: "#2C2C2A" }}
+                  >
+                    Details
+                  </button>
+                  {Number(b.tip_amount) > 0 && (
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "#EAF3DE", color: "#27500A" }}>
+                      +€{Number(b.tip_amount).toFixed(2)} tip
+                    </span>
+                  )}
+                  {b.status === "canceled" && b.deposit_payment_status === "paid" ? (
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
+                      Deposit kept: €{Number(b.deposit_amount ?? 0).toFixed(2)}
+                    </span>
+                  ) : (
+                    b.payment_timing === "later" && (
+                      <span
+                        className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                        style={{ background: b.balance_collected ? "#EAF3DE" : "#FAEEDA", color: b.balance_collected ? "#27500A" : "#633806" }}
                       >
-                        <Navigation size={13} /> Navigate
-                      </a>
-                    )}
-                  </div>
+                        <Wallet size={9} /> {b.balance_collected ? "Collected" : "Pay in taxi"}
+                      </span>
+                    )
+                  )}
                 </div>
               </div>
                     {(() => {

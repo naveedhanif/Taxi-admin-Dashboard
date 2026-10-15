@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  MapPin, Plus, Circle, Car, Bell, Loader2, Phone, Navigation2,
+  MapPin, Circle, Car, Bell, Loader2, Phone, Navigation2,
   ArrowUp, ArrowDown, PlayCircle, CheckCircle2, Clock, AlertTriangle, Star,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
@@ -108,7 +108,7 @@ function TrendBadge({ value, suffix, color }: { value: number | null; suffix: st
   );
 }
 
-export default function OverviewDashboard({ driverId, onNavigate }: { driverId: string | null; onNavigate?: (screen: string) => void }) {
+export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking }: { driverId: string | null; onNavigate?: (screen: string) => void; onOpenBooking?: (bookingId: string) => void }) {
   useGoogleFont();
   const [businessName, setBusinessName] = useState("");
   const [hasVehicle, setHasVehicle] = useState(true); // defaults true so nothing flashes a false nudge before the real check loads
@@ -484,12 +484,6 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
             </div>
           )
         )}
-        <button
-          onClick={() => onNavigate?.("bookings")}
-          className="emboss-btn-primary flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-sm font-semibold text-white cursor-pointer sm:flex-initial"
-        >
-          <Plus size={15} /> Add booking
-        </button>
       </div>
 
       {isIosNonStandalone() && !pushBannerDismissed && (
@@ -555,7 +549,13 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
       <div className="mb-5 rounded-2xl bg-white p-5 shadow-sm" style={{ border: "1px solid #ECE9E0" }}>
         {activeTrip ? (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenBooking?.(activeTrip.id)}
+              onKeyDown={(e) => { if (e.key === "Enter") onOpenBooking?.(activeTrip.id); }}
+              className="cursor-pointer rounded-xl"
+            >
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
                 <Circle size={8} fill="#185FA5" stroke="none" className="animate-pulse" />
                 Active Dispatch: {activeTrip.passenger_name.split(" ")[0]}
@@ -575,6 +575,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
                   €{Number(activeTrip.final_fare ?? activeTrip.estimated_fare ?? 0).toFixed(2)}
                 </div>
               </div>
+              <div className="mt-3 text-xs font-semibold text-[#185FA5]">View ride details ›</div>
             </div>
 
             <div>

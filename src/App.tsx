@@ -229,7 +229,7 @@ export default function App() {
 
   // Shares GPS with the passenger only while a booking is en_route or
   // arrived; clears it the moment that's no longer true.
-  const { state: locationShareState } = useLiveLocationSharing(driverId);
+  const { state: locationShareState, retry: retryLocation } = useLiveLocationSharing(driverId);
 
   // Unlocks audio playback for mobile browsers. Most mobile browsers
   // (iOS Safari in particular) block .play() calls that don't trace
@@ -705,14 +705,28 @@ export default function App() {
                   />
                   {locationShareState === "active" && "Sharing your live location with the passenger"}
                   {locationShareState === "waiting" && "Finding your location…"}
-                  {locationShareState === "denied" &&
-                    "Location is blocked — the passenger can't see you. Allow location for this app in your phone settings."}
+                  {locationShareState === "denied" && (
+                    <span>
+                      Location is blocked — the passenger can't see you. On iPhone: Settings → Privacy &amp; Security → Location Services → Safari Websites → While Using, then tap Try again.
+                    </span>
+                  )}
                   {locationShareState === "unavailable" && "This device can't share location."}
+                  {locationShareState === "denied" && (
+                    <button onClick={retryLocation} className="ml-auto shrink-0 rounded-md px-2 py-1 font-semibold underline">Try again</button>
+                  )}
                 </div>
               </div>
             )}
             <div className="px-3 sm:px-6">
-              {dashboardScreen === "overview" && <OverviewDashboard driverId={driverId} onNavigate={(s) => setDashboardScreen(s as any)} />}
+              {dashboardScreen === "overview" && <OverviewDashboard
+                driverId={driverId}
+                onNavigate={(s) => setDashboardScreen(s as any)}
+                onOpenBooking={(id) => {
+                  setOpenChatWithBooking(false);
+                  setOpenBookingId(id);
+                  setDashboardScreen("bookings");
+                }}
+              />}
               {dashboardScreen === "login" && (
                 <LoginScreen
                   onLoginSuccess={() => setDashboardScreen("overview")}
