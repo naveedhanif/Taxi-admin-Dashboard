@@ -552,12 +552,7 @@ export default function AllBookingsScreen({
       const isHistoryStatus = b.status === "completed" || b.status === "canceled";
       if (mode === "history" && !isHistoryStatus) return false;
       if (mode === "upcoming" && isHistoryStatus) return false;
-      const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter, customStartDate, customEndDate);
-      const matchesSearch =
-        b.passenger_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.pickup_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.dropoff_address.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesDate && matchesSearch;
+      return true;
     });
     return {
       all: base.length,
@@ -599,31 +594,21 @@ export default function AllBookingsScreen({
       const isHistoryStatus = b.status === "completed" || b.status === "canceled";
       if (mode === "history" && !isHistoryStatus) return false;
       if (mode === "upcoming" && isHistoryStatus) return false;
-      if (mode === "upcoming") {
-        const isConfirmedGroup = ["confirmed", "en_route", "arrived", "in_progress"].includes(b.status);
-        if (upcomingTab === "pending" && b.status !== "pending") return false;
-        if (upcomingTab === "confirmed" && !isConfirmedGroup) return false;
-      }
+      // Bookings: everything upcoming or active, no filters at all.
+      if (mode === "upcoming") return true;
 
-      const matchesStatus =
-        filterStatus === "all"
-          ? true
-          : filterStatus === "history"
-          ? b.status === "completed" || b.status === "canceled"
-          : filterStatus === "tipped"
-          ? Number(b.tip_amount) > 0
-          : b.status === filterStatus;
-      const matchesDate = matchesDateFilter(b.scheduled_time, dateFilter, customStartDate, customEndDate);
-      const matchesSearch =
-        b.passenger_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.pickup_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.dropoff_address.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesStatus && matchesDate && matchesSearch;
+      // History: the status chips are the only filter.
+      return filterStatus === "all"
+        ? true
+        : filterStatus === "tipped"
+        ? Number(b.tip_amount) > 0
+        : b.status === filterStatus;
     })
     .sort((a, b) => {
       const timeA = new Date(a.scheduled_time).getTime();
       const timeB = new Date(b.scheduled_time).getTime();
-      return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
+      // Upcoming: soonest first. History: most recent first.
+      return mode === "history" ? timeB - timeA : timeA - timeB;
     });
 
   // Real fare total for whichever tab is active.
@@ -809,110 +794,6 @@ export default function AllBookingsScreen({
             {mode === "history" ? "Completed and canceled trips" : "Manage passenger pre-bookings and schedule dispatch"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {mode === "history" && (
-            <div className="relative">
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="emboss-input rounded-full py-2.5 pl-9 pr-8 text-xs font-semibold text-[#2C2C2A] appearance-none"
-              >
-                {DATE_FILTER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <Calendar size={13} className="pointer-events-none absolute left-3.5 top-3 text-[#185FA5]" />
-            </div>
-          )}
-          <button
-            onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-            className="emboss-btn flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-medium text-[#2C2C2A] cursor-pointer"
-          >
-            <ArrowUpDown size={13} /> Sort: {sortOrder === "asc" ? "Earliest first" : "Latest first"}
-          </button>
-          {mode === "upcoming" && (
-            <span className="text-xs text-[#8C8977]">
-              Timezone: Dublin (
-              {(() => {
-                // Computed live from the real current offset, not
-                // hardcoded — Dublin is GMT+1 (IST) in summer and GMT+0
-                // in winter, so a fixed string would be wrong half the year.
-                const offset = new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", timeZoneName: "shortOffset" })
-                  .formatToParts(new Date())
-                  .find((p) => p.type === "timeZoneName")?.value;
-                return offset?.replace("GMT", "GMT") ?? "GMT";
-              })()}
-              )
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="relative md:col-span-1">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search passenger name, pickup or dropoff..."
-            className="emboss-input w-full rounded-xl px-3.5 py-2.5 pl-10 text-xs text-[#2C2C2A] placeholder-[#B4B2A9]"
-          />
-          <Search size={15} className="absolute left-3.5 top-3 text-[#B4B2A9]" />
-        </div>
-
-        <div className="relative">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="emboss-input w-full rounded-xl px-3.5 py-2.5 pr-8 text-xs font-medium text-[#2C2C2A] appearance-none"
-          >
-            {filterOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <Filter size={14} className="absolute right-3.5 top-3.5 text-[#5F5E5A] pointer-events-none" />
-        </div>
-
-        <div className="relative">
-          <select
-            value={dateFilter}
-            onChange={(e) => {
-              const val = e.target.value;
-              setDateFilter(val);
-              // Only an explicit "Custom range…" selection opens the
-              // panel — picking any other preset (Today, This Week,
-              // etc.) closes it, since it's no longer relevant.
-              setShowCustomRangePanel(val === "custom");
-            }}
-            className="emboss-input w-full rounded-xl px-3.5 py-2.5 pr-8 text-xs font-medium text-[#2C2C2A] appearance-none"
-          >
-            {DATE_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => {
-              setShowCustomRangePanel((v) => {
-                const next = !v;
-                if (next) setDateFilter("custom");
-                return next;
-              });
-            }}
-            className="absolute right-2.5 top-2 flex h-6 w-6 items-center justify-center rounded-md"
-            style={{ background: dateFilter === "custom" ? "#E6F1FB" : "transparent" }}
-            aria-label="Toggle custom date range"
-          >
-            <Calendar size={14} style={{ color: dateFilter === "custom" ? "#185FA5" : "#5F5E5A" }} />
-          </button>
-        </div>
       </div>
 
       {mode === "history" && (
@@ -948,204 +829,6 @@ export default function AllBookingsScreen({
         </div>
       )}
 
-      {mode === "upcoming" && (
-        <div className="mb-6 flex gap-2">
-          {[
-            { value: "pending" as const, label: "Pending Requests", count: statusCounts.pending },
-            { value: "confirmed" as const, label: "Confirmed", count: statusCounts.confirmed },
-          ].map((tab) => {
-            const isSelected = upcomingTab === tab.value;
-            return (
-              <button
-                key={tab.value}
-                onClick={() => setUpcomingTab(tab.value)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-semibold"
-                style={{
-                  background: isSelected ? "white" : "#F1EFE8",
-                  color: isSelected ? "#185FA5" : "#5F5E5A",
-                  boxShadow: isSelected ? "0 1px 4px rgba(44,44,42,0.12)" : "none",
-                }}
-              >
-                {tab.label}
-                <span
-                  className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-                  style={{ background: tab.value === "pending" ? "#BA7517" : "#185FA5" }}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-
-      {/* Custom range panel — only shown when explicitly opened via the
-          calendar icon or the "Custom range…" preset, never as a
-          side-effect of tapping a single day on the week-strip below. */}
-      {dateFilter === "custom" && showCustomRangePanel && (
-        <div
-          className="mb-6 rounded-xl border border-[#E4E2DA] bg-white p-4"
-          style={{ overflow: "hidden", width: "100%", boxSizing: "border-box" }}
-        >
-          {/* Grid, not flex — this exact card has now had two failed
-              flex-based overflow fixes (min-w-0, box-sizing on the
-              inputs alone). Grid columns have fundamentally more
-              predictable sizing: each column gets exactly its share,
-              with no flex-shrink ambiguity to get wrong a third time.
-              overflow:hidden on the card above is a hard backstop
-              regardless of any remaining computation quirk. */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-              width: "100%",
-              boxSizing: "border-box",
-            }}
-          >
-            <div style={{ minWidth: 0, width: "100%", boxSizing: "border-box" }}>
-              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
-              />
-            </div>
-            <div style={{ minWidth: 0, width: "100%", boxSizing: "border-box" }}>
-              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">To</label>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
-              />
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(customStartDate || customEndDate) && (
-              <button
-                onClick={() => {
-                  setCustomStartDate("");
-                  setCustomEndDate("");
-                }}
-                className="emboss-btn rounded-lg px-4 py-2 text-xs font-medium text-[#5F5E5A] cursor-pointer"
-              >
-                Clear dates
-              </button>
-            )}
-            <button
-              onClick={() => setShowCustomRangePanel(false)}
-              className="emboss-btn-primary rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Week at a glance — history mode only. This took up too much
-          space on the Bookings screen specifically and doesn't match
-          the reference design, which has no calendar grid at all —
-          just the compact date-range pill above. Still real and
-          useful on History, where it was actually requested. */}
-      {mode === "history" && (
-      <div className="mb-6 rounded-2xl border border-[#E4E2DA] bg-white p-3">
-        <div className="mb-2 flex items-center justify-between px-1">
-          <button
-            onClick={() => setWeekWindowStart((prev) => { const d = new Date(prev); d.setDate(d.getDate() - 7); return d; })}
-            className="flex h-7 w-7 items-center justify-center rounded-full"
-            style={{ background: "#F1EFE8" }}
-            aria-label="Previous week"
-          >
-            <ChevronRight size={13} className="rotate-180 text-[#5F5E5A]" />
-          </button>
-          <span className="text-[11px] font-semibold text-[#5F5E5A]">
-            {weekWindowStart.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-            {" – "}
-            {(() => {
-              const end = new Date(weekWindowStart);
-              end.setDate(end.getDate() + 6);
-              return end.toLocaleDateString(undefined, { day: "numeric", month: "short" });
-            })()}
-          </span>
-          <button
-            onClick={() => setWeekWindowStart((prev) => { const d = new Date(prev); d.setDate(d.getDate() + 7); return d; })}
-            className="flex h-7 w-7 items-center justify-center rounded-full"
-            style={{ background: "#F1EFE8" }}
-            aria-label="Next week"
-          >
-            <ChevronRight size={13} className="text-[#5F5E5A]" />
-          </button>
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: 7 }, (_, i) => {
-            const day = new Date(weekWindowStart);
-            day.setDate(day.getDate() + i);
-            const dayEnd = new Date(day);
-            dayEnd.setDate(dayEnd.getDate() + 1);
-            const dayStr = day.toISOString().slice(0, 10);
-            const hasBookings = bookingsList.some((b) => {
-              const t = new Date(b.scheduled_time);
-              return t >= day && t < dayEnd;
-            });
-            const isToday = day.toDateString() === new Date().toDateString();
-            const isSelected = dateFilter === "custom" && customStartDate === dayStr && customEndDate === dayStr;
-            return (
-              <button
-                key={dayStr}
-                onClick={() => {
-                  setDateFilter("custom");
-                  setCustomStartDate(dayStr);
-                  setCustomEndDate(dayStr);
-                }}
-                className="flex flex-col items-center gap-1.5 rounded-xl py-2.5 text-center"
-                style={{
-                  background: isToday ? "#1A1D29" : isSelected ? "#E6F1FB" : "transparent",
-                  color: isToday ? "white" : "#2C2C2A",
-                }}
-              >
-                <span className="text-[10px] font-semibold uppercase" style={{ opacity: 0.6 }}>
-                  {isToday ? "Today" : day.toLocaleDateString(undefined, { weekday: "short" })}
-                </span>
-                <span className="text-base font-bold">{day.getDate()}</span>
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: hasBookings ? (isToday ? "#4ADE80" : "#185FA5") : "transparent" }}
-                />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      )}
-
-      {/* Summary bar — separate from the day cards below, since it's
-          describing the whole filtered set, not any one day. */}
-      <div className="mb-4 flex items-center justify-between text-xs text-[#5F5E5A]">
-        <span>
-          Showing {filteredBookings.length} {mode === "upcoming" ? (upcomingTab === "pending" ? "pending request" : "confirmed booking") + (filteredBookings.length === 1 ? "" : "s") : "trips"}
-        </span>
-        <span>
-          Filtered by: <strong className="text-[#2C2C2A] capitalize">{filterStatus}</strong>
-          {dateFilter !== "all" && (
-            <>
-              {" "}·{" "}
-              <strong className="text-[#2C2C2A]">
-                {dateFilter === "custom"
-                  ? customStartDate || customEndDate
-                    ? `${customStartDate || "…"} to ${customEndDate || "…"}`
-                    : "Custom range"
-                  : DATE_FILTER_OPTIONS.find((o) => o.value === dateFilter)?.label}
-              </strong>
-            </>
-          )}
-        </span>
-      </div>
-
       {errorMessage && (
         <div className="mb-4 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
           <AlertCircle size={14} /> {errorMessage}
@@ -1158,7 +841,7 @@ export default function AllBookingsScreen({
         </div>
       ) : filteredBookings.length === 0 ? (
         <div className="rounded-xl border border-[#E4E2DA] bg-white py-12 text-center text-sm text-[#5F5E5A]">
-          {bookingsList.length === 0 ? "No bookings yet." : "No bookings match your filter criteria."}
+          {mode === "history" ? (bookingsList.some((b) => b.status === "completed" || b.status === "canceled") ? "No trips in this category." : "No finished trips yet.") : "No upcoming or active bookings."}
         </div>
       ) : (
         <div className="space-y-4">
