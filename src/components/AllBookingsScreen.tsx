@@ -297,6 +297,9 @@ export default function AllBookingsScreen({
       return "";
     }
   });
+  // Order toggle for the list: Bookings opens earliest-first (what's
+  // coming next), History opens latest-first (what just finished).
+  const [latestFirst, setLatestFirst] = useState(mode === "history");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   // Chat bottom sheet — mirrors the passenger app's own tap-to-open
   // pattern exactly (was previously an always-expanded inline panel
@@ -609,8 +612,7 @@ export default function AllBookingsScreen({
     .sort((a, b) => {
       const timeA = new Date(a.scheduled_time).getTime();
       const timeB = new Date(b.scheduled_time).getTime();
-      // Upcoming: soonest first. History: most recent first.
-      return mode === "history" ? timeB - timeA : timeA - timeB;
+      return latestFirst ? timeB - timeA : timeA - timeB;
     });
 
   // Real fare total for whichever tab is active.
@@ -797,6 +799,12 @@ export default function AllBookingsScreen({
             {mode === "history" ? "Completed and canceled trips" : "Manage passenger pre-bookings and schedule dispatch"}
           </p>
         </div>
+        <button
+          onClick={() => setLatestFirst((v) => !v)}
+          className="emboss-btn flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-semibold text-[#2C2C2A] cursor-pointer"
+        >
+          <ArrowUpDown size={13} /> {latestFirst ? "Latest first" : "Earliest first"}
+        </button>
       </div>
 
       {mode === "history" && (
