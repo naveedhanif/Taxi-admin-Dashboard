@@ -552,6 +552,7 @@ export default function AllBookingsScreen({
       const isHistoryStatus = b.status === "completed" || b.status === "canceled";
       if (mode === "history" && !isHistoryStatus) return false;
       if (mode === "upcoming" && isHistoryStatus) return false;
+      if (mode === "history" && !matchesDateFilter(b.scheduled_time, "custom", customStartDate, customEndDate)) return false;
       return true;
     });
     return {
@@ -597,7 +598,8 @@ export default function AllBookingsScreen({
       // Bookings: everything upcoming or active, no filters at all.
       if (mode === "upcoming") return true;
 
-      // History: the status chips are the only filter.
+      // History: status chips + optional custom date range.
+      if (!matchesDateFilter(b.scheduled_time, "custom", customStartDate, customEndDate)) return false;
       return filterStatus === "all"
         ? true
         : filterStatus === "tipped"
@@ -618,7 +620,8 @@ export default function AllBookingsScreen({
   // pass, not a full re-sort, so it naturally respects whichever sort
   // direction (soonest-first or latest-first) is currently selected.
   const groupedBookings = filteredBookings.reduce((groups: { label: string; bookings: Booking[] }[], b) => {
-    const label = groupLabel(b.scheduled_time);
+    // History shows no dates at all — one flat list.
+    const label = mode === "history" ? "" : groupLabel(b.scheduled_time);
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.bookings.push(b);
     else groups.push({ label, bookings: [b] });
@@ -829,6 +832,42 @@ export default function AllBookingsScreen({
         </div>
       )}
 
+      {mode === "history" && (
+        <div className="mb-6 rounded-xl border border-[#E4E2DA] bg-white p-4" style={{ overflow: "hidden", width: "100%", boxSizing: "border-box" }}>
+          <div className="mb-2 text-xs font-semibold text-[#5F5E5A]">Custom range</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, width: "100%", boxSizing: "border-box" }}>
+            <div style={{ minWidth: 0 }}>
+              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
+              />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">To</label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
+                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
+              />
+            </div>
+          </div>
+          {(customStartDate || customEndDate) && (
+            <button
+              onClick={() => { setCustomStartDate(""); setCustomEndDate(""); }}
+              className="emboss-btn mt-3 rounded-lg px-4 py-2 text-xs font-medium text-[#5F5E5A] cursor-pointer"
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+      )}
+
       {errorMessage && (
         <div className="mb-4 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
           <AlertCircle size={14} /> {errorMessage}
@@ -846,8 +885,8 @@ export default function AllBookingsScreen({
       ) : (
         <div className="space-y-4">
           {groupedBookings.map((group) => (
-            <div key={group.label}>
-              <div className="mb-1 flex items-baseline justify-between px-1">
+            <div key={group.label || "all"}>
+              <div className={mode === "history" ? "hidden" : "mb-1 flex items-baseline justify-between px-1"}>
                 <h2 className="text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>{group.label}</h2>
                 {(() => {
                   const groupTotal = group.bookings.reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);

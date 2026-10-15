@@ -82,6 +82,24 @@ export function useLiveLocationSharing(driverId: string | null) {
     };
   }, [driverId]);
 
+  // 1b) While blocked, re-check automatically when the driver comes back
+  //     from phone Settings or the permission flips — no need to tap.
+  useEffect(() => {
+    if (state !== "denied") return;
+    let status: PermissionStatus | null = null;
+    const recheck = () => setRetryTick((n) => n + 1);
+    const onVisible = () => { if (document.visibilityState === "visible") recheck(); };
+    document.addEventListener("visibilitychange", onVisible);
+    navigator.permissions?.query({ name: "geolocation" as PermissionName }).then((r) => {
+      status = r;
+      r.onchange = recheck;
+    }).catch((err) => console.error("useLiveLocationSharing: permissions.query failed:", err));
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      if (status) status.onchange = null;
+    };
+  }, [state]);
+
   // 2) While there is a trip to track, watch GPS and upsert; when there
   //    isn't, make sure nothing is left behind.
   useEffect(() => {

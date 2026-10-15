@@ -99,11 +99,13 @@ export default function PermissionsCard({ driverId }: { driverId: string | null 
 
   const locOk = loc === "granted";
   const allOk = !!notif?.ok && locOk;
+  const version = typeof __APP_COMMIT_SHA__ !== "undefined" ? __APP_COMMIT_SHA__ : "local";
   if (allOk) {
     return (
       <div className="mb-5 flex items-center gap-2 rounded-lg p-2.5 text-[11px]" style={{ background: "#EAF3DE", color: "#27500A" }}>
         <CheckCircle2 size={14} /> Notifications and location are on.
-        <button onClick={enableAll} className="ml-auto font-semibold underline">Recheck</button>
+        <span className="ml-auto text-[10px] opacity-60">v{version}</span>
+        <button onClick={enableAll} className="font-semibold underline">Recheck</button>
       </div>
     );
   }
@@ -130,6 +132,7 @@ export default function PermissionsCard({ driverId }: { driverId: string | null 
       >
         {busy ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} Enable all
       </button>
+      <div className="mt-2 text-[10px] text-[#185FA5] opacity-70">App version {version}</div>
     </div>
   );
 }

@@ -313,6 +313,29 @@ export default function App() {
     };
   }, [driverId]);
 
+  // Home-screen web apps on iPhone keep running an old copy of the app
+  // for days. Whenever the app comes back to the foreground, compare the
+  // bundle we're running with the one currently deployed, and reload if
+  // they differ — so new deploys reach the driver without reinstalling.
+  useEffect(() => {
+    if (import.meta.env.DEV) return;
+    async function checkForUpdate() {
+      try {
+        const res = await fetch("/index.html", { cache: "no-store" });
+        const html = await res.text();
+        const latest = html.match(/\/assets\/index-[\w-]+\.js/)?.[0];
+        const running = Array.from(document.scripts).map((sc) => sc.src).find((src) => /\/assets\/index-[\w-]+\.js/.test(src));
+        if (latest && running && !running.endsWith(latest)) window.location.reload();
+      } catch (err) {
+        console.error("Update check failed:", err);
+      }
+    }
+    checkForUpdate();
+    const onVisible = () => { if (document.visibilityState === "visible") checkForUpdate(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   function handleOpenBookingFromNotification(id: string) {
     setDashboardScreen("bookings");
     setOpenChatWithBooking(false);
@@ -707,7 +730,7 @@ export default function App() {
                   {locationShareState === "waiting" && "Finding your location…"}
                   {locationShareState === "denied" && (
                     <span>
-                      Location is blocked — the passenger can't see you. On iPhone: Settings → Privacy &amp; Security → Location Services → Safari Websites → While Using, then tap Try again.
+                      Location is blocked — the passenger can't see you. {locationHelpText()} Then come back here — it re-checks automatically.
                     </span>
                   )}
                   {locationShareState === "unavailable" && "This device can't share location."}
@@ -821,6 +844,16 @@ export default function App() {
       {import.meta.env.DEV && <VersionBadge />}
     </div>
   );
+}
+
+// Where the driver must switch location on depends on how the app was
+// opened — a Home Screen app and a Chrome tab live in different places.
+function locationHelpText(): string {
+  const ua = navigator.userAgent;
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true;
+  if (/CriOS/.test(ua)) return "Open iPhone Settings → Chrome → Location → While Using the App (and make sure Settings → Privacy & Security → Location Services is on).";
+  if (standalone) return "Open iPhone Settings → Privacy & Security → Location Services → Safari Websites → While Using (and make sure Location Services is on).";
+  return "In Safari tap aA → Website Settings → Location → Allow (and make sure Settings → Privacy & Security → Location Services is on).";
 }
 
 function VersionBadge() {
