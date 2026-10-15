@@ -1,6 +1,6 @@
 import type React from "react";
 import { useState, useEffect } from "react";
-import { Building2, Phone, Globe, ArrowRight, CheckCircle2, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+import { Building2, Phone, Globe, ArrowRight, CheckCircle2, Mail, Lock, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { signUpDriver } from "../driverAuth";
 
 function useGoogleFont() {
@@ -82,6 +82,8 @@ function TiltCard({ children, className = "", style = {} }: { children: React.Re
 }
 
 function RecessedField({ icon: Icon, ...props }: any) {
+  const [reveal, setReveal] = useState(false);
+  const isPassword = props.type === "password";
   return (
     <div
       className="flex items-center gap-2 rounded-lg px-3.5 py-2.5 transition-all"
@@ -93,9 +95,20 @@ function RecessedField({ icon: Icon, ...props }: any) {
       <Icon size={15} color="#8C8977" />
       <input
         {...props}
+        type={isPassword && reveal ? "text" : props.type}
         className="w-full bg-transparent text-sm outline-none placeholder:text-[#8C8977]"
         style={{ color: "#2C2C2A", fontFamily: "Inter" }}
       />
+      {isPassword && (
+        <button
+          type="button"
+          onClick={() => setReveal((v) => !v)}
+          aria-label={reveal ? "Hide password" : "Show password"}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#8C8977]"
+        >
+          {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
+      )}
     </div>
   );
 }

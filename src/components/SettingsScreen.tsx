@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Car, Percent, CreditCard, ShieldCheck, Building2, Clock, Star } from "lucide-react";
+import { Car, Percent, CreditCard, ShieldCheck, Building2, Clock, Star, Gift } from "lucide-react";
+import ReferralSettingsScreen from "./ReferralSettingsScreen";
 import VehicleInfoScreen from "./VehicleInfoScreen";
 import FareRulesScreen from "./FareRulesScreen";
 import StripeOnboardingScreen from "./StripeOnboardingScreen";
@@ -14,7 +15,7 @@ import PoolJobsToggle from "./PoolJobsToggle";
 // enough to deserve first-class nav, not to be buried a tab deep in
 // Settings. This file just no longer imports/renders it.
 
-type SettingsTab = "profile" | "vehicle" | "fare_rules" | "stripe" | "licence" | "schedule" | "reviews";
+type SettingsTab = "profile" | "vehicle" | "fare_rules" | "stripe" | "licence" | "schedule" | "reviews" | "referral";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Car }[] = [
   { id: "profile", label: "Business Profile", icon: Building2 },
@@ -22,6 +23,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Car }[] = [
   { id: "fare_rules", label: "Fare Rules & Discounts", icon: Percent },
   { id: "schedule", label: "Working Hours", icon: Clock },
   { id: "reviews", label: "Reviews", icon: Star },
+  { id: "referral", label: "Refer & Earn", icon: Gift },
   { id: "stripe", label: "Stripe", icon: CreditCard },
   { id: "licence", label: "SPSV Licence", icon: ShieldCheck },
 ];
@@ -75,6 +77,7 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
       {tab === "fare_rules" && <FareRulesScreen driverId={driverId} />}
       {tab === "schedule" && <ScheduleScreen driverId={driverId} />}
       {tab === "reviews" && <ReviewsScreen driverId={driverId} />}
+      {tab === "referral" && <ReferralSettingsScreen driverId={driverId} />}
       {tab === "stripe" && <StripeOnboardingScreen driverId={driverId} />}
       {tab === "licence" && <LicenceScreen driverId={driverId} />}
     </div>
