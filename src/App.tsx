@@ -19,6 +19,7 @@ import PoolJobsScreen from "./components/PoolJobsScreen";
 import NotificationToast from "./NotificationToast";
 import { useNewBookingNotifications } from "./useNewBookingNotifications";
 import { enableDriverPush, isPushSupported } from "./pushNotifications";
+import { useChatAlerts } from "./useChatAlerts";
 import { useLiveLocationSharing } from "./useLiveLocationSharing";
 import { supabase } from "./supabaseClient";
 import { getDriverForUser } from "./driverAuth";
@@ -268,6 +269,9 @@ export default function App() {
   // via onOpenBookingHandled below.
   const [openBookingId, setOpenBookingId] = useState<string | null>(null);
   const [openChatWithBooking, setOpenChatWithBooking] = useState(false);
+  // Booking whose chat panel is currently mounted — it alerts for itself.
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const { alert: chatAlert, dismissAlert: dismissChatAlert } = useChatAlerts(driverId, selectedBookingId);
 
   // Cold start from a chat-message push (app was closed): the URL itself
   // carries the booking, there is no already-running app to postMessage.
@@ -389,6 +393,38 @@ export default function App() {
           so the very first alert isn't delayed by a fetch. */}
       <audio ref={audioRef} src="/new-booking-alert.wav" preload="auto" />
       <NotificationToast notifications={notifications} onDismiss={dismiss} onOpenBooking={handleOpenBookingFromNotification} />
+      {chatAlert && (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            setDashboardScreen("bookings");
+            setOpenChatWithBooking(true);
+            setOpenBookingId(chatAlert.bookingId);
+            dismissChatAlert();
+          }}
+          className="fixed left-3 right-3 top-3 z-50 mx-auto max-w-sm cursor-pointer rounded-xl p-3.5"
+          style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "0 12px 28px rgba(44,44,42,0.22)", fontFamily: "Inter" }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-[#2C2C2A]">New message from {chatAlert.passengerName}</div>
+              <div className="mt-0.5 truncate text-xs text-[#5F5E5A]">{chatAlert.preview}</div>
+              <div className="mt-1 text-[11px] font-medium" style={{ color: "#185FA5" }}>Tap to open chat</div>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                dismissChatAlert();
+              }}
+              className="shrink-0 text-xs text-[#8C8977]"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top bar — branding + onboarding/dashboard mode toggle only.
           Screen navigation lives in the left sidebar now. */}
@@ -691,6 +727,7 @@ export default function App() {
                     setOpenChatWithBooking(false);
                   }}
                   openChatWithBooking={openChatWithBooking}
+                  onSelectedBookingChange={setSelectedBookingId}
                   mode="upcoming"
                   onChatOpenChange={setChatOpen}
                   onBookingsViewed={refreshUnviewedCount}

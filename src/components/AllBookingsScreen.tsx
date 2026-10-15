@@ -207,6 +207,7 @@ export default function AllBookingsScreen({
   openBookingId,
   onOpenBookingHandled,
   openChatWithBooking = false,
+  onSelectedBookingChange,
   mode = "upcoming",
   onChatOpenChange,
   onBookingsViewed,
@@ -217,6 +218,9 @@ export default function AllBookingsScreen({
   // True when the booking was opened from a "new chat message" push —
   // opens the chat sheet straight away instead of the plain details.
   openChatWithBooking?: boolean;
+  // Lets the app know which booking's chat panel is mounted, so the
+  // global chat alert doesn't double-alert for it.
+  onSelectedBookingChange?: (id: string | null) => void;
   // "upcoming" (the Bookings screen) never shows completed/canceled
   // trips — those live on the separate History screen ("history" mode)
   // instead, which only ever shows completed/canceled.
@@ -314,6 +318,11 @@ export default function AllBookingsScreen({
   // selection has changed, because this effect used to close the chat
   // on every selection change and would otherwise undo an auto-open.
   const openChatNextRef = useRef(false);
+  useEffect(() => {
+    onSelectedBookingChange?.(selectedBooking?.id ?? null);
+    return () => onSelectedBookingChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBooking?.id]);
   useEffect(() => {
     if (openChatNextRef.current && selectedBooking) {
       openChatNextRef.current = false;
