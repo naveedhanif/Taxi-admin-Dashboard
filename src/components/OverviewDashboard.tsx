@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "../supabaseClient";
+import PermissionsCard from "./PermissionsCard";
 import { enableDriverPush, isPushSupported, isIosNonStandalone } from "../pushNotifications";
 import ShareLinkCard from "./ShareLinkCard";
 
@@ -130,38 +131,6 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
   const [enablingPush, setEnablingPush] = useState(false);
   const [pushBannerDismissed, setPushBannerDismissed] = useState(false);
   const [pushError, setPushError] = useState("");
-  // Result of registering THIS device for push, shown on the dashboard so a
-  // driver (or support) can see exactly why alerts aren't arriving instead
-  // of guessing. null = not checked yet / not applicable.
-  const [pushStatus, setPushStatus] = useState<{ ok: boolean; message: string } | null>(null);
-
-  function describePushError(error?: string): string {
-    if (error === "not configured") return "This app build has no push key (VITE_VAPID_PUBLIC_KEY missing in Vercel). Add it and redeploy.";
-    if (error === "denied") return "Notifications are blocked for this app in your phone/browser settings.";
-    if (error === "unsupported") return "This browser can't receive push notifications. On iPhone, open the app from the Home Screen icon.";
-    return `Couldn't register this device: ${error || "unknown error"}`;
-  }
-
-  async function checkPushRegistration() {
-    if (!driverId || !isPushSupported() || Notification.permission !== "granted") return;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (!accessToken) {
-      console.error("Push status check skipped: no session access token.");
-      return;
-    }
-    const result = await enableDriverPush(driverId, accessToken);
-    if (!result.enabled) console.error("Push registration failed:", result.error);
-    setPushStatus(result.enabled
-      ? { ok: true, message: "Notifications are on for this device." }
-      : { ok: false, message: describePushError(result.error) });
-  }
-
-  useEffect(() => {
-    checkPushRegistration();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driverId]);
-
   async function handleEnablePush() {
     if (!driverId) return;
     setEnablingPush(true);
@@ -177,7 +146,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
     setEnablingPush(false);
     if (!result.enabled) {
       console.error("Enable push failed:", result.error);
-      setPushError(describePushError(result.error));
+      setPushError(result.error === "denied" ? "Notifications are blocked for this site in your browser settings." : "Couldn't enable notifications — try again.");
       setPushPermission(isPushSupported() ? Notification.permission : "unsupported");
       return;
     }
@@ -555,15 +524,7 @@ export default function OverviewDashboard({ driverId, onNavigate }: { driverId: 
         </div>
       )}
       {pushError && <div className="mb-5 rounded-lg p-2.5 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>{pushError}</div>}
-      {pushStatus && (
-        <div
-          className="mb-5 flex items-center justify-between gap-3 rounded-lg p-2.5 text-[11px]"
-          style={pushStatus.ok ? { background: "#EAF3DE", color: "#27500A" } : { background: "#FCEBEB", color: "#791F1F" }}
-        >
-          <span>{pushStatus.message}</span>
-          <button onClick={checkPushRegistration} className="shrink-0 font-semibold underline">Recheck</button>
-        </div>
-      )}
+      <PermissionsCard driverId={driverId} />
 
       {!hasVehicle && (
         <div className="mb-5 flex items-center justify-between gap-3 rounded-xl p-3.5" style={{ background: "#FAEEDA", border: "1px solid #F0D9A8" }}>
