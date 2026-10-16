@@ -46,6 +46,7 @@ export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight
   // "Loading…" spinner with no way to tell it had actually failed
   // (e.g. the messages table/functions not deployed yet).
   const [loadError, setLoadError] = useState("");
+  const [sendError, setSendError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   // Tracks which message ids we've already seen, so a genuinely NEW
@@ -134,10 +135,21 @@ export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
 
+  // When the keyboard opens/closes the visible area changes — keep the
+  // latest message in view instead of leaving it hidden above the fold.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const toBottom = () => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    vv.addEventListener("resize", toBottom);
+    return () => vv.removeEventListener("resize", toBottom);
+  }, []);
+
   async function handleSend() {
     const text = draft.trim();
     if (!text || sending) return;
     setSending(true);
+    setSendError("");
     const optimistic: Message = { id: `pending-${Date.now()}`, sender_role: "driver", body: text, created_at: new Date().toISOString() };
     setMessages((prev) => [...prev, optimistic]);
     setDraft("");
@@ -145,7 +157,7 @@ export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight
     setSending(false);
     if (result.error) {
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-      window.alert(result.error);
+      setSendError(result.error);
     }
   }
 
@@ -157,7 +169,7 @@ export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight
           <MessageCircle size={13} /> Messages
         </div>
       )}
-      <div ref={scrollRef} className="space-y-2 overflow-y-auto p-3" style={{ maxHeight: maxListHeight || "13rem" }}>
+      <div ref={scrollRef} className="space-y-2 overflow-y-auto p-3" style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", maxHeight: maxListHeight || "13rem" }}>
         {!loaded ? (
           <div className="flex items-center justify-center gap-1.5 py-4 text-xs text-[#8C8977]">
             <Loader2 size={12} className="animate-spin" /> Loading…
@@ -172,7 +184,7 @@ export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight
           messages.map((m) => (
             <div key={m.id} className={`flex ${m.sender_role === "driver" ? "justify-end" : "justify-start"}`}>
               <div
-                className="max-w-[75%] rounded-2xl px-3 py-1.5 text-xs"
+                className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm"
                 style={
                   m.sender_role === "driver"
                     ? { background: "#185FA5", color: "white" }
@@ -185,6 +197,11 @@ export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight
           ))
         )}
       </div>
+      {sendError && (
+        <div className="flex items-center gap-1.5 px-3 pb-1 text-xs" style={{ color: "#791F1F" }}>
+          <AlertCircle size={12} /> Message not sent — {sendError}
+        </div>
+      )}
       <div className="flex items-center gap-2 border-t border-[#ECE9E0] p-2.5">
         <input
           value={draft}
@@ -196,17 +213,21 @@ export default function ChatPanel({ bookingId, hideHeader = false, maxListHeight
             }
           }}
           placeholder="Type a message…"
-          className="flex-1 rounded-full px-3.5 py-2 text-xs text-[#2C2C2A] placeholder:text-[#B4B2A9]"
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="on"
+          // 16px stops iOS from zooming the whole page when the box is tapped.
+          className="min-w-0 flex-1 rounded-full px-4 py-2.5 text-base text-[#2C2C2A] placeholder:text-[#B4B2A9]"
           style={{ background: "#F0EEE7" }}
         />
         <button
           onClick={handleSend}
           disabled={!draft.trim() || sending}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
           style={{ background: "#185FA5" }}
           aria-label="Send"
         >
-          <Send size={13} />
+          <Send size={16} />
         </button>
       </div>
     </div>

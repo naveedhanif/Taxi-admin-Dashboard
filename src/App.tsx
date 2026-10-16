@@ -407,7 +407,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5] text-[#2C2C2A] font-sans antialiased">
+    <div className="min-h-dvh bg-[#F7F7F5] text-[#2C2C2A] font-sans antialiased">
       {/* The hook already calls audioRef.current?.play() on every new
           booking — this element is what it was missing. Without a real
           <audio> to attach to, that call silently did nothing, which is
