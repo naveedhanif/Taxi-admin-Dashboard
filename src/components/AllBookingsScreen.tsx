@@ -333,6 +333,8 @@ export default function AllBookingsScreen({
   // selection has changed, because this effect used to close the chat
   // on every selection change and would otherwise undo an auto-open.
   const openChatNextRef = useRef(false);
+  const openBookingIdRef = useRef<string | null>(openBookingId ?? null);
+  openBookingIdRef.current = openBookingId ?? null;
   useEffect(() => {
     onSelectedBookingChange?.(selectedBooking?.id ?? null);
     return () => onSelectedBookingChange?.(null);
@@ -481,7 +483,9 @@ export default function AllBookingsScreen({
           hasRestoredSelectionRef.current = true;
           try {
             const savedId = localStorage.getItem(`taxi_admin_selected_booking_${driverId}`);
-            if (savedId) {
+            // A notification tap is more specific than "whatever was
+            // open last time" — don't let the restore fight it.
+            if (savedId && !openBookingIdRef.current) {
               const match = list.find((b) => b.id === savedId);
               if (match) setSelectedBooking(match);
             }
@@ -670,12 +674,21 @@ export default function AllBookingsScreen({
     if (!openBookingId) return;
     const match = bookingsList.find((b) => b.id === openBookingId);
     if (match) {
-      if (openChatWithBooking) openChatNextRef.current = true;
+      if (openChatWithBooking) {
+        // If this booking is already the selected one, the selection
+        // effect never fires (same id) so the chat would stay shut —
+        // open it directly. Otherwise let that effect do it.
+        if (selectedBooking?.id === match.id) setChatOpen(true);
+        else openChatNextRef.current = true;
+      }
       handleSelectBooking(match);
+      onOpenBookingHandled?.();
+    } else if (!loading) {
+      console.error(`Notification pointed at booking ${openBookingId}, which isn't in this driver's list — nothing to open.`);
       onOpenBookingHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openBookingId, bookingsList]);
+  }, [openBookingId, bookingsList, loading]);
 
   const updateBookingStatus = async (id: string, newStatus: Booking["status"]) => {
     setUpdatingId(id);    const { error } = await supabase.from("bookings").update({ status: newStatus }).eq("id", id);
