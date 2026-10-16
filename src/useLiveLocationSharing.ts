@@ -29,6 +29,8 @@ import { supabase } from "./supabaseClient";
 const ACTIVE_TRACKING_STATUSES = ["en_route", "arrived"];
 const MIN_SEND_INTERVAL_MS = 8000; // matches the passenger poll interval
 const SAFETY_REFETCH_MS = 60000;
+const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // an "active" trip scheduled >12h ago is leftover data
+const AHEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type LocationShareState =
   | "idle" // no trip needing tracking
@@ -51,17 +53,36 @@ export function useLiveLocationSharing(driverId: string | null) {
     async function refresh() {
       const { data, error } = await supabase
         .from("bookings")
-        .select("id")
+        .select("id, scheduled_time")
         .eq("driver_id", driverId)
         .in("status", ACTIVE_TRACKING_STATUSES)
         .order("scheduled_time", { ascending: true })
-        .limit(1);
+        .limit(50);
       if (cancelled) return;
       if (error) {
         console.error("useLiveLocationSharing: couldn't check active trip:", error.message);
         return;
       }
-      setBookingId(data && data.length > 0 ? data[0].id : null);
+      // live_tracking holds ONE position per driver, tagged with one booking,
+      // and a passenger only sees it for their own booking. Picking the
+      // oldest active booking meant an old test booking left on "arrived"
+      // for weeks stole the position from the real current ride. So: ignore
+      // anything scheduled outside a sane window and pick the booking
+      // closest to now.
+      const now = Date.now();
+      const candidates = (data ?? []).filter((b) => {
+        const t = new Date(b.scheduled_time).getTime();
+        return t >= now - STALE_AFTER_MS && t <= now + AHEAD_WINDOW_MS;
+      });
+      if ((data ?? []).length > candidates.length) {
+        console.error(
+          `useLiveLocationSharing: ignoring ${(data ?? []).length - candidates.length} stale active booking(s) (scheduled outside the last 12h / next 24h) — complete or cancel them so they stop showing as active.`
+        );
+      }
+      candidates.sort(
+        (a, b) => Math.abs(new Date(a.scheduled_time).getTime() - now) - Math.abs(new Date(b.scheduled_time).getTime() - now)
+      );
+      setBookingId(candidates.length > 0 ? candidates[0].id : null);
     }
 
     refresh();

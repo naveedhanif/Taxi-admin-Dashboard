@@ -29,7 +29,20 @@ function describePushError(error?: string): string {
  * so there was nothing to turn on in Settings. Permission prompts must
  * come from a tap, hence the button.
  */
-export default function PermissionsCard({ driverId }: { driverId: string | null }) {
+export default function PermissionsCard({ driverId, variant = "home" }: { driverId: string | null; variant?: "home" | "settings" }) {
+  // "home" asks only once per device: after the driver has tapped Enable all
+  // (or it was already completed), the Home screen never shows it again. The
+  // full status + button stays available under Settings → Permissions.
+  const promptedKey = `taxi_permissions_prompted_${driverId}`;
+  const [prompted, setPrompted] = useState(() => {
+    try {
+      return localStorage.getItem(promptedKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [touchedThisSession, setTouchedThisSession] = useState(false);
+  const hiddenOnHome = variant === "home" && prompted && !touchedThisSession;
   const [notif, setNotif] = useState<{ ok: boolean; message: string } | null>(null);
   const [loc, setLoc] = useState<LocState>("prompt");
   const [busy, setBusy] = useState(false);
@@ -62,9 +75,10 @@ export default function PermissionsCard({ driverId }: { driverId: string | null 
   }, [driverId]);
 
   useEffect(() => {
+    if (hiddenOnHome) return;
     register();
     readLocation().then(setLoc);
-  }, [register]);
+  }, [register, hiddenOnHome]);
 
   async function enableAll() {
     setBusy(true);
@@ -94,8 +108,17 @@ export default function PermissionsCard({ driverId }: { driverId: string | null 
       await register();
     } finally {
       setBusy(false);
+      try {
+        localStorage.setItem(promptedKey, "1");
+      } catch (err) {
+        console.error("PermissionsCard: couldn't remember that setup was done:", err);
+      }
+      setPrompted(true);
+      setTouchedThisSession(true);
     }
   }
+
+  if (hiddenOnHome) return null;
 
   const locOk = loc === "granted";
   const allOk = !!notif?.ok && locOk;

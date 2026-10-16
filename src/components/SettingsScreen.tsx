@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Car, Percent, CreditCard, ShieldCheck, Building2, Clock, Star, Gift } from "lucide-react";
+import { Car, Percent, CreditCard, ShieldCheck, Building2, Clock, Star, Gift, Bell } from "lucide-react";
+import PermissionsCard from "./PermissionsCard";
 import ReferralSettingsScreen from "./ReferralSettingsScreen";
 import VehicleInfoScreen from "./VehicleInfoScreen";
 import FareRulesScreen from "./FareRulesScreen";
@@ -15,7 +16,7 @@ import PoolJobsToggle from "./PoolJobsToggle";
 // enough to deserve first-class nav, not to be buried a tab deep in
 // Settings. This file just no longer imports/renders it.
 
-type SettingsTab = "profile" | "vehicle" | "fare_rules" | "stripe" | "licence" | "schedule" | "reviews" | "referral";
+type SettingsTab = "profile" | "vehicle" | "fare_rules" | "stripe" | "licence" | "schedule" | "reviews" | "referral" | "permissions";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Car }[] = [
   { id: "profile", label: "Business Profile", icon: Building2 },
@@ -24,6 +25,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Car }[] = [
   { id: "schedule", label: "Working Hours", icon: Clock },
   { id: "reviews", label: "Reviews", icon: Star },
   { id: "referral", label: "Refer & Earn", icon: Gift },
+  { id: "permissions", label: "Notifications & Location", icon: Bell },
   { id: "stripe", label: "Stripe", icon: CreditCard },
   { id: "licence", label: "SPSV Licence", icon: ShieldCheck },
 ];
@@ -78,6 +80,7 @@ export default function SettingsScreen({ driverId }: { driverId: string | null }
       {tab === "schedule" && <ScheduleScreen driverId={driverId} />}
       {tab === "reviews" && <ReviewsScreen driverId={driverId} />}
       {tab === "referral" && <ReferralSettingsScreen driverId={driverId} />}
+      {tab === "permissions" && <PermissionsCard driverId={driverId} variant="settings" />}
       {tab === "stripe" && <StripeOnboardingScreen driverId={driverId} />}
       {tab === "licence" && <LicenceScreen driverId={driverId} />}
     </div>
