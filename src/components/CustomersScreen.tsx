@@ -265,8 +265,12 @@ function PromoModal({
   );
 }
 
-function PromoCard({ promo, onToggle, onDelete }: { key?: string; promo: Promo; onToggle: (p: Promo) => void; onDelete: (p: Promo) => void }) {
+function PromoCard({ promo, onToggle, onDelete, onNotify }: { key?: string; promo: Promo; onToggle: (p: Promo) => void; onDelete: (p: Promo) => void; onNotify: (p: Promo) => Promise<string> }) {
   const [copied, setCopied] = useState(false);
+  // Two-tap confirm so a broadcast can't be sent by accident.
+  const [confirmNotify, setConfirmNotify] = useState(false);
+  const [notifying, setNotifying] = useState(false);
+  const [notifyResult, setNotifyResult] = useState("");
   const isExpired = promo.expires_at != null && new Date(promo.expires_at) < new Date();
   const isLive = promo.active && !isExpired;
   const usageRatio = promo.max_uses ? Math.min(promo.uses_count / promo.max_uses, 1) : null;
@@ -308,7 +312,27 @@ function PromoCard({ promo, onToggle, onDelete }: { key?: string; promo: Promo; 
           <div className="h-full rounded-full" style={{ width: `${usageRatio * 100}%`, background: "linear-gradient(90deg, #378ADD, #185FA5)" }} />
         </div>
       )}
+      {notifyResult && <div className="mb-2 text-[11px] text-[#5F5E5A]">{notifyResult}</div>}
       <div className="flex items-center gap-1.5">
+        {isLive && (
+          <button
+            disabled={notifying}
+            onClick={async () => {
+              if (!confirmNotify) {
+                setConfirmNotify(true);
+                setTimeout(() => setConfirmNotify(false), 4000);
+                return;
+              }
+              setConfirmNotify(false);
+              setNotifying(true);
+              setNotifyResult(await onNotify(promo));
+              setNotifying(false);
+            }}
+            className="emboss-btn-primary flex-1 rounded-lg py-1.5 text-[11px] font-semibold text-white disabled:opacity-60"
+          >
+            {notifying ? "Sending…" : confirmNotify ? (promo.customer_id ? "Tap again to send" : "Tap again — send to all customers") : "Notify customers"}
+          </button>
+        )}
         <button onClick={() => onToggle(promo)} className="emboss-btn flex-1 rounded-lg py-1.5 text-[11px] font-semibold text-[#5F5E5A]">
           {promo.active ? "Pause" : "Resume"}
         </button>
@@ -526,6 +550,18 @@ export default function CustomersScreen({ driverId }: { driverId: string | null 
       setErrorMessage(result.error);
       loadAll();
     }
+  }
+
+  // Returns a one-line result for the card. Server enforces the 24h
+  // cool-down and sends fixed text, so nothing here can spam.
+  async function handleNotifyPromo(promo: Promo): Promise<string> {
+    const result = await authedFetch("notify-customers", { action: "promo", driver_id: driverId, promo_id: promo.id });
+    if (result.error) {
+      console.error("notify-customers (promo) failed:", result.error);
+      return result.error;
+    }
+    if (!result.sent_to) return result.note || "No customers have notifications turned on yet.";
+    return `Sent to ${result.sent_to} customer${result.sent_to === 1 ? "" : "s"}.`;
   }
 
   async function handleDeletePromo(promo: Promo) {
@@ -966,7 +1002,7 @@ export default function CustomersScreen({ driverId }: { driverId: string | null 
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {promos.map((p) => (
-                <PromoCard key={p.id} promo={p} onToggle={handleTogglePromo} onDelete={handleDeletePromo} />
+                <PromoCard key={p.id} promo={p} onToggle={handleTogglePromo} onDelete={handleDeletePromo} onNotify={handleNotifyPromo} />
               ))}
             </div>
           )}

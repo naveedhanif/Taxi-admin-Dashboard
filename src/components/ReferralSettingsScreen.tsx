@@ -17,6 +17,7 @@ export default function ReferralSettingsScreen({ driverId }: { driverId: string 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [notifyMessage, setNotifyMessage] = useState("");
 
   useEffect(() => {
     if (!driverId) {
@@ -64,8 +65,37 @@ export default function ReferralSettingsScreen({ driverId }: { driverId: string 
       setErrorMessage(error.message);
       return;
     }
+    const turnedOn = nextEnabled && !enabled;
     setEnabled(nextEnabled);
     setPercent(nextPercent);
+    // One announcement when the driver switches Refer & Earn on. The
+    // server sends fixed text and refuses a repeat within 7 days, so
+    // flicking the switch can't spam customers.
+    if (turnedOn) {
+      setNotifyMessage("");
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const { data: sessionData } = await supabase.auth.getSession();
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/notify-customers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || anonKey}`, apikey: anonKey },
+          body: JSON.stringify({ action: "referral", driver_id: driverId }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          console.error("notify-customers (referral) failed:", result.error);
+          setNotifyMessage(result.error || "Couldn't notify customers.");
+        } else if (result.sent_to) {
+          setNotifyMessage(`Told ${result.sent_to} customer${result.sent_to === 1 ? "" : "s"} about Refer & Earn.`);
+        } else {
+          setNotifyMessage(result.note || "No customers have notifications turned on yet.");
+        }
+      } catch (err) {
+        console.error("notify-customers (referral) request failed:", err);
+        setNotifyMessage("Couldn't notify customers.");
+      }
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -155,6 +185,8 @@ export default function ReferralSettingsScreen({ driverId }: { driverId: string 
           {saved ? "Saved" : "Save"}
         </button>
       </div>
+
+      {notifyMessage && <div className="mt-3 text-[11px] text-[#5F5E5A]">{notifyMessage}</div>}
 
       {errorMessage && (
         <div className="mt-3 flex items-center gap-2 rounded-lg p-2.5 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
