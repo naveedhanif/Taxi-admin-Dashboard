@@ -285,6 +285,11 @@ export default function AllBookingsScreen({
   const [filterStatus, setFilterStatus] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(`taxi_admin_bookings_filter_${driverId}`);
+      // Bookings and History share this saved key. A value left over from
+      // the other screen (e.g. "confirmed") matches no History tab, which
+      // left History showing an empty list with nothing highlighted.
+      const historyValues = ["all", "completed", "canceled", "tipped"];
+      if (mode === "history" && saved && !historyValues.includes(saved)) return "all";
       return saved && VALID_STATUS_FILTERS.includes(saved) ? saved : "all";
     } catch {
       return "all";
