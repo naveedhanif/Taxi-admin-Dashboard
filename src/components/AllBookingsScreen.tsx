@@ -203,6 +203,19 @@ function matchesDateFilter(scheduledTime: string, filter: string, customStart: s
   }
 }
 
+function startOfTodayMs(): number {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+}
+// A booking belongs in History once it is finished, or once its day has
+// passed without it ever being completed (nothing is hidden — old unfinished
+// bookings just live in History instead of cluttering Bookings).
+function belongsToHistory(b: { status: string; scheduled_time: string }): boolean {
+  if (b.status === "completed" || b.status === "canceled") return true;
+  if (["en_route", "arrived", "in_progress"].includes(b.status)) return false;
+  return new Date(b.scheduled_time).getTime() < startOfTodayMs();
+}
+
 // Local-time YYYY-MM-DD (toISOString would shift the date in UTC+ zones).
 function toDateInputValue(d: Date): string {
   const y = d.getFullYear();
@@ -211,6 +224,7 @@ function toDateInputValue(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 const DATE_PRESETS: { label: string; range: () => { from: string; to: string } }[] = [
+  { label: "All time", range: () => ({ from: "", to: "" }) },
   { label: "Today", range: () => { const t = new Date(); return { from: toDateInputValue(t), to: toDateInputValue(t) }; } },
   { label: "Last 7 days", range: () => { const t = new Date(); const f = new Date(); f.setDate(t.getDate() - 6); return { from: toDateInputValue(f), to: toDateInputValue(t) }; } },
   { label: "Last 30 days", range: () => { const t = new Date(); const f = new Date(); f.setDate(t.getDate() - 29); return { from: toDateInputValue(f), to: toDateInputValue(t) }; } },
@@ -300,6 +314,9 @@ export default function AllBookingsScreen({
     }
   });
   const [customStartDate, setCustomStartDate] = useState(() => {
+    // History opens on the last 7 days; anything older is one tap away
+    // (presets, date pickers, or searching by customer name).
+    if (mode === "history") return DATE_PRESETS[2].range().from;
     try {
       return localStorage.getItem(`taxi_admin_bookings_customstart_${driverId}`) || "";
     } catch {
@@ -307,6 +324,7 @@ export default function AllBookingsScreen({
     }
   });
   const [customEndDate, setCustomEndDate] = useState(() => {
+    if (mode === "history") return DATE_PRESETS[2].range().to;
     try {
       return localStorage.getItem(`taxi_admin_bookings_customend_${driverId}`) || "";
     } catch {
@@ -316,6 +334,7 @@ export default function AllBookingsScreen({
   // Order toggle for the list: Bookings opens earliest-first (what's
   // coming next), History opens latest-first (what just finished).
   const [latestFirst, setLatestFirst] = useState(mode === "history");
+  const [historySearch, setHistorySearch] = useState("");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   // Chat bottom sheet — mirrors the passenger app's own tap-to-open
   // pattern exactly (was previously an always-expanded inline panel
@@ -581,12 +600,25 @@ export default function AllBookingsScreen({
   // to match whichever pill happens to be selected) — but still
   // respecting mode/date/search, since those are genuine scope
   // boundaries, not just a display filter.
+  // History scope: a customer-name/phone search looks through ALL dates;
+  // with no search text, the chosen date range applies.
+  const historySearchTerm = historySearch.trim().toLowerCase();
+  const matchesHistoryScope = (b: Booking): boolean => {
+    if (historySearchTerm) {
+      return (
+        (b.passenger_name ?? "").toLowerCase().includes(historySearchTerm) ||
+        (b.passenger_phone ?? "").replace(/\s/g, "").includes(historySearchTerm.replace(/\s/g, ""))
+      );
+    }
+    return matchesDateFilter(b.scheduled_time, "custom", customStartDate, customEndDate);
+  };
+
   const statusCounts = (() => {
     const base = bookingsList.filter((b) => {
-      const isHistoryStatus = b.status === "completed" || b.status === "canceled";
+      const isHistoryStatus = belongsToHistory(b);
       if (mode === "history" && !isHistoryStatus) return false;
       if (mode === "upcoming" && isHistoryStatus) return false;
-      if (mode === "history" && !matchesDateFilter(b.scheduled_time, "custom", customStartDate, customEndDate)) return false;
+      if (mode === "history" && !matchesHistoryScope(b)) return false;
       return true;
     });
     return {
@@ -626,14 +658,14 @@ export default function AllBookingsScreen({
       // Hard mode boundary, independent of whatever the status dropdown
       // is set to — Bookings (upcoming) and History are two genuinely
       // separate views, not the same list with a different default.
-      const isHistoryStatus = b.status === "completed" || b.status === "canceled";
+      const isHistoryStatus = belongsToHistory(b);
       if (mode === "history" && !isHistoryStatus) return false;
       if (mode === "upcoming" && isHistoryStatus) return false;
-      // Bookings: everything upcoming or active, no filters at all.
+      // Bookings: everything from today onwards (plus anything underway).
       if (mode === "upcoming") return true;
 
-      // History: status chips + optional custom date range.
-      if (!matchesDateFilter(b.scheduled_time, "custom", customStartDate, customEndDate)) return false;
+      // History: customer search (all time) or the date range, then status chips.
+      if (!matchesHistoryScope(b)) return false;
       return filterStatus === "all"
         ? true
         : filterStatus === "tipped"
@@ -836,7 +868,7 @@ export default function AllBookingsScreen({
             {mode === "history" ? "Trip History" : "Bookings"}
           </h1>
           <p className="text-sm text-[#5F5E5A]">
-            {mode === "history" ? "Completed and canceled trips" : "Manage passenger pre-bookings and schedule dispatch"}
+            {mode === "history" ? "Past trips — last 7 days by default. Search any customer or pick dates to go further back." : "Today and upcoming bookings — finished trips move to History"}
           </p>
         </div>
         <button
@@ -882,6 +914,21 @@ export default function AllBookingsScreen({
 
       {mode === "history" && (
         <div className="mb-6 rounded-xl border border-[#E4E2DA] bg-white p-4" style={{ overflow: "hidden", width: "100%", boxSizing: "border-box" }}>
+          <label className="mb-1 block text-xs font-semibold text-[#5F5E5A]">Find a customer</label>
+          <div className="relative mb-1">
+            <input
+              type="search"
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              placeholder="Customer name or phone"
+              className="emboss-input date-field text-[#2C2C2A]"
+              style={{ lineHeight: "normal" }}
+              aria-label="Search customer by name or phone"
+            />
+          </div>
+          <div className="mb-3 text-[11px] text-[#8C8977]">
+            {historySearchTerm ? "Searching all dates — the date range below is ignored while you search." : "Searches every past trip, not just this date range."}
+          </div>
           <div className="mb-2 text-xs font-semibold text-[#5F5E5A]">Date range</div>
           {/* Quick presets — one tap for the ranges drivers actually use. */}
           <div className="mb-3 flex flex-wrap gap-2">

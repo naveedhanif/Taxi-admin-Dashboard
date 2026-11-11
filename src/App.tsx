@@ -520,8 +520,8 @@ export default function App() {
       {/* Top bar — branding + onboarding/dashboard mode toggle only.
           Screen navigation lives in the left sidebar now. */}
       <header className="sticky top-0 z-40 border-b border-[#ECE9E0] bg-[#F7F7F5] px-3 sm:px-6 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {viewMode === "dashboard" && driverId && (
               <>
                 {/* Mobile: opens/closes the slide-over drawer — animated
@@ -575,8 +575,8 @@ export default function App() {
             >
               <Car size={20} className="text-white" />
             </div>
-            <div>
-              <div className="text-base font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+            <div className="min-w-0">
+              <div className="truncate text-base font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
                 {businessName || "Driver Dashboard"}{" "}
                 <span className="hidden text-xs font-normal text-[#5F5E5A] sm:inline">— Driver SaaS</span>
               </div>
@@ -598,7 +598,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-nowrap items-center gap-2">
             {/* Onboarding is only for drivers who haven't set up an
                 account yet. Once driverId exists, jumping back into
                 onboarding makes no sense and risks a returning driver
@@ -640,10 +640,11 @@ export default function App() {
             {driverId && (
               <button
                 onClick={handleLogout}
-                className="emboss-btn flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-[#991B1B] cursor-pointer transition-all"
+                aria-label="Log out"
+                className="emboss-btn flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-[#991B1B] cursor-pointer transition-all"
               >
                 <LogOut size={13} />
-                <span>Log out</span>
+                <span className="hidden sm:inline">Log out</span>
               </button>
             )}
           </div>

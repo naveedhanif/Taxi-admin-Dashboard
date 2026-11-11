@@ -72,6 +72,8 @@ export function useNewBookingNotifications(driverId: string | null) {
       .select("id", { count: "exact", head: true })
       .eq("driver_id", driverId)
       .in("status", ACTIVE_STATUSES)
+      // Bookings whose day has passed live in History now, so they're not "new".
+      .gte("scheduled_time", new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
       .is("driver_viewed_at", null);
     const n = count ?? 0;
     setUnviewedCount(n);
