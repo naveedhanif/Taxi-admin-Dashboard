@@ -1021,7 +1021,11 @@ export default function AllBookingsScreen({
                     <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
                       Deposit kept: €{Number(b.deposit_amount ?? 0).toFixed(2)}
                     </span>
-                  ) : (
+                  ) : b.status === "canceled" && b.deposit_payment_status === "refunded" ? (
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "#EAF3DE", color: "#27500A" }}>
+                      Deposit refunded: €{Number(b.deposit_amount ?? 0).toFixed(2)}
+                    </span>
+                  ) : b.status === "canceled" ? null : (
                     b.payment_timing === "later" && (
                       <span
                         className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
@@ -1209,12 +1213,16 @@ export default function AllBookingsScreen({
                     <Wallet size={11} /> Pay in taxi — deposit booking
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#5F5E5A]">Deposit paid (Stripe)</span>
+                    <span className="text-[#5F5E5A]">
+                      {selectedBooking.deposit_payment_status === "refunded" ? "Deposit refunded (Stripe)" : "Deposit paid (Stripe)"}
+                    </span>
                     <span className="font-semibold text-[#2C2C2A]">€{Number(selectedBooking.deposit_amount).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#5F5E5A]">Balance owed to you</span>
-                    <span className="font-semibold text-[#2C2C2A]">€{Number(selectedBooking.balance_due ?? 0).toFixed(2)}</span>
+                    <span className="font-semibold text-[#2C2C2A]">
+                      €{(selectedBooking.status === "canceled" ? 0 : Number(selectedBooking.balance_due ?? 0)).toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center pt-1 border-t border-dashed border-[#E4C99A]">
                     <span className="text-[#5F5E5A]">Collected?</span>
