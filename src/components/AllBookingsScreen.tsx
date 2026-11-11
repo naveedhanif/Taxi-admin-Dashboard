@@ -203,6 +203,21 @@ function matchesDateFilter(scheduledTime: string, filter: string, customStart: s
   }
 }
 
+// Local-time YYYY-MM-DD (toISOString would shift the date in UTC+ zones).
+function toDateInputValue(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+const DATE_PRESETS: { label: string; range: () => { from: string; to: string } }[] = [
+  { label: "Today", range: () => { const t = new Date(); return { from: toDateInputValue(t), to: toDateInputValue(t) }; } },
+  { label: "Last 7 days", range: () => { const t = new Date(); const f = new Date(); f.setDate(t.getDate() - 6); return { from: toDateInputValue(f), to: toDateInputValue(t) }; } },
+  { label: "Last 30 days", range: () => { const t = new Date(); const f = new Date(); f.setDate(t.getDate() - 29); return { from: toDateInputValue(f), to: toDateInputValue(t) }; } },
+  { label: "This month", range: () => { const t = new Date(); return { from: toDateInputValue(new Date(t.getFullYear(), t.getMonth(), 1)), to: toDateInputValue(t) }; } },
+  { label: "Last month", range: () => { const t = new Date(); return { from: toDateInputValue(new Date(t.getFullYear(), t.getMonth() - 1, 1)), to: toDateInputValue(new Date(t.getFullYear(), t.getMonth(), 0)) }; } },
+];
+
 export default function AllBookingsScreen({
   driverId,
   openBookingId,
@@ -867,28 +882,48 @@ export default function AllBookingsScreen({
 
       {mode === "history" && (
         <div className="mb-6 rounded-xl border border-[#E4E2DA] bg-white p-4" style={{ overflow: "hidden", width: "100%", boxSizing: "border-box" }}>
-          <div className="mb-2 text-xs font-semibold text-[#5F5E5A]">Custom range</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, width: "100%", boxSizing: "border-box" }}>
-            <div style={{ minWidth: 0 }}>
-              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">From</label>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
-              />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">To</label>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="emboss-input rounded-lg px-3 py-2 text-xs text-[#2C2C2A]"
-                style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", display: "block" }}
-              />
-            </div>
+          <div className="mb-2 text-xs font-semibold text-[#5F5E5A]">Date range</div>
+          {/* Quick presets — one tap for the ranges drivers actually use. */}
+          <div className="mb-3 flex flex-wrap gap-2">
+            {DATE_PRESETS.map((preset) => {
+              const range = preset.range();
+              const active = customStartDate === range.from && customEndDate === range.to;
+              return (
+                <button
+                  key={preset.label}
+                  onClick={() => { setCustomStartDate(range.from); setCustomEndDate(range.to); }}
+                  className={`rounded-full px-3.5 py-2 text-xs font-semibold cursor-pointer ${active ? "emboss-btn-primary text-white" : "emboss-btn text-[#5F5E5A]"}`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* One column on phones (two native date pickers side by side
+              overlap on iOS), two columns from the sm breakpoint up. Still
+              CSS Grid, per the regression watchlist. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" style={{ width: "100%", boxSizing: "border-box" }}>
+            {[
+              { label: "From", value: customStartDate, set: setCustomStartDate },
+              { label: "To", value: customEndDate, set: setCustomEndDate },
+            ].map((field) => (
+              <div key={field.label} style={{ minWidth: 0 }}>
+                <label className="mb-1 block text-xs font-medium text-[#5F5E5A]">{field.label}</label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={field.value}
+                    onChange={(e) => field.set(e.target.value)}
+                    className="emboss-input date-field text-[#2C2C2A]"
+                    aria-label={`${field.label} date`}
+                  />
+                  {/* iOS renders an empty date input as a blank box — show a hint. */}
+                  {!field.value && (
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#8C8977]">Select date</span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
           {(customStartDate || customEndDate) && (
             <button
