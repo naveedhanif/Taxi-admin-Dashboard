@@ -790,6 +790,7 @@ export default function App() {
             <div className="px-3 sm:px-6">
               {dashboardScreen === "overview" && <OverviewDashboard
                 driverId={driverId}
+                unviewedCount={unviewedCount}
                 onNavigate={(s) => setDashboardScreen(s as any)}
                 onOpenBooking={(id) => {
                   setOpenChatWithBooking(false);

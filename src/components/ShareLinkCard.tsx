@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Share2, Copy, Check, Download, QrCode, ExternalLink } from "lucide-react";
+import { Share2, Copy, Check, Download, QrCode, ExternalLink, X, Maximize2 } from "lucide-react";
 import QRCode from "qrcode";
 import { supabase } from "../supabaseClient";
 
@@ -21,11 +21,14 @@ function useGoogleFont() {
   }, []);
 }
 
-export default function ShareLinkCard({ driverId }: { driverId: string | null }) {
+export default function ShareLinkCard({ driverId, compact = false }: { driverId: string | null; compact?: boolean }) {
   useGoogleFont();
   const [bookingSlug, setBookingSlug] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [businessName, setBusinessName] = useState("");
+  const [bigQrDataUrl, setBigQrDataUrl] = useState<string | null>(null);
+  const [showFullScreen, setShowFullScreen] = useState(false);
   const passengerAppUrl = (import.meta.env.VITE_PASSENGER_APP_URL as string | undefined) || "https://taxi-passenger-pwa.vercel.app";
   const bookingUrl = bookingSlug ? `${passengerAppUrl}/${bookingSlug}` : null;
 
@@ -33,18 +36,39 @@ export default function ShareLinkCard({ driverId }: { driverId: string | null })
     if (!driverId) return;
     supabase
       .from("drivers")
-      .select("booking_slug")
+      .select("booking_slug, business_name")
       .eq("id", driverId)
       .single()
-      .then(({ data }) => setBookingSlug(data?.booking_slug ?? null));
+      .then(({ data, error }) => {
+        if (error) console.error("ShareLinkCard: couldn't load booking link:", error.message);
+        setBookingSlug(data?.booking_slug ?? null);
+        setBusinessName(data?.business_name ?? "");
+      });
   }, [driverId]);
 
   useEffect(() => {
     if (!bookingUrl) return;
     QRCode.toDataURL(bookingUrl, { width: 240, margin: 1, color: { dark: "#2C2C2A", light: "#FFFFFF" } })
       .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
+      .catch((err) => {
+        console.error("ShareLinkCard: QR generation failed:", err);
+        setQrDataUrl(null);
+      });
+    // Large version for the "show to customer" full-screen view.
+    QRCode.toDataURL(bookingUrl, { width: 900, margin: 2, color: { dark: "#000000", light: "#FFFFFF" } })
+      .then(setBigQrDataUrl)
+      .catch((err) => {
+        console.error("ShareLinkCard: large QR generation failed:", err);
+        setBigQrDataUrl(null);
+      });
   }, [bookingUrl]);
+
+  useEffect(() => {
+    if (!showFullScreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowFullScreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showFullScreen]);
 
   async function handleCopy() {
     if (!bookingUrl) return;
@@ -79,6 +103,66 @@ export default function ShareLinkCard({ driverId }: { driverId: string | null })
   }
 
   if (!bookingSlug) return null;
+
+  const fullScreenOverlay = showFullScreen && (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-white p-6 text-center" role="dialog" aria-label="Booking QR code">
+      <button onClick={() => setShowFullScreen(false)} className="emboss-btn absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full" aria-label="Close">
+        <X size={18} />
+      </button>
+      <div className="text-xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>{businessName || "Book a ride"}</div>
+      <div className="text-sm text-[#5F5E5A]">Scan with your phone camera to book</div>
+      {bigQrDataUrl ? (
+        <img src={bigQrDataUrl} alt="Booking QR code" style={{ width: "min(80vw, 60vh, 420px)", height: "min(80vw, 60vh, 420px)" }} />
+      ) : (
+        <div className="text-sm text-[#991B1B]">Couldn't generate the QR code — use Share instead.</div>
+      )}
+      <div className="max-w-full break-all text-xs font-mono text-[#8C8977]">{bookingUrl}</div>
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <>
+        {fullScreenOverlay}
+        <div className="w-full overflow-hidden rounded-xl p-4" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
+            <QrCode size={15} className="text-[#185FA5]" /> Get more bookings
+          </div>
+          <div className="flex items-center gap-4">
+            {qrDataUrl && (
+              <button
+                onClick={() => setShowFullScreen(true)}
+                className="relative shrink-0 rounded-xl bg-white p-2"
+                style={{ border: "1px solid #ECE9E0" }}
+                aria-label="Show QR code full screen to a customer"
+              >
+                <img src={qrDataUrl} alt="Booking QR code" width={84} height={84} />
+                <span className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full text-white" style={{ background: "#185FA5" }}>
+                  <Maximize2 size={11} />
+                </span>
+              </button>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="mb-2 text-xs text-[#8C8977]">Tap the code to show it full screen to a customer, or share your link.</p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={handleShare} className="emboss-btn-primary flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white">
+                  <Share2 size={13} /> Share link
+                </button>
+                <button onClick={handleCopy} className="emboss-btn flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-[#5F5E5A]">
+                  {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}
+                </button>
+                {qrDataUrl && (
+                  <button onClick={handleDownloadQr} className="emboss-btn flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-[#5F5E5A]">
+                    <Download size={13} /> Save QR
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <div className="w-full overflow-hidden rounded-xl p-4 sm:p-5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>

@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import {
   MapPin, Circle, Car, Bell, Loader2, Phone, Navigation2,
-  ArrowUp, ArrowDown, PlayCircle, CheckCircle2, Clock, AlertTriangle, Star,
+  ArrowUp, ArrowDown, PlayCircle, CheckCircle2, Clock, AlertTriangle, Star, Plane, Wallet, CalendarClock, ChevronRight,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip, LabelList } from "recharts";
 import { supabase } from "../supabaseClient";
 import PermissionsCard from "./PermissionsCard";
 import { enableDriverPush, isPushSupported, isIosNonStandalone } from "../pushNotifications";
@@ -108,7 +108,7 @@ function TrendBadge({ value, suffix, color }: { value: number | null; suffix: st
   );
 }
 
-export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking }: { driverId: string | null; onNavigate?: (screen: string) => void; onOpenBooking?: (bookingId: string) => void }) {
+export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking, unviewedCount = 0 }: { driverId: string | null; onNavigate?: (screen: string) => void; onOpenBooking?: (bookingId: string) => void; unviewedCount?: number }) {
   useGoogleFont();
   const [businessName, setBusinessName] = useState("");
   const [hasVehicle, setHasVehicle] = useState(true); // defaults true so nothing flashes a false nudge before the real check loads
@@ -124,6 +124,9 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
   const [lastWeekSameDayCount, setLastWeekSameDayCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [advancingStage, setAdvancingStage] = useState(false);
+  const [nextFuture, setNextFuture] = useState<Booking | null>(null);
+  const [cashToCollect, setCashToCollect] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
+  const [openAirportJobs, setOpenAirportJobs] = useState<number | null>(null);
 
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(() =>
     isPushSupported() ? Notification.permission : "unsupported"
@@ -272,6 +275,58 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
       .lt("scheduled_time", lastWeekDayEnd.toISOString());
     setLastWeekSameDayCount(lastWeekCount ?? 0);
 
+    // Next confirmed/pending booking AFTER today — shown in the hero when
+    // nothing is left today, so the card is never an empty box while the
+    // driver actually has work booked.
+    const { data: futureData, error: futureError } = await supabase
+      .from("bookings")
+      .select(SELECT_COLS)
+      .eq("driver_id", driverId)
+      .in("status", ["pending", "confirmed"])
+      .gte("scheduled_time", todayEnd.toISOString())
+      .order("scheduled_time")
+      .limit(1);
+    if (futureError) console.error("Dashboard: couldn't load next upcoming booking:", futureError.message);
+    setNextFuture(futureData && futureData[0] ? futureData[0] : null);
+
+    // Cash still to collect: completed pay-in-taxi trips whose balance
+    // hasn't been marked collected. Real rows only.
+    const { data: cashData, error: cashError } = await supabase
+      .from("bookings")
+      .select("balance_due")
+      .eq("driver_id", driverId)
+      .eq("payment_timing", "later")
+      .eq("status", "completed")
+      .eq("balance_collected", false);
+    if (cashError) console.error("Dashboard: couldn't load cash to collect:", cashError.message);
+    const cashRows = (cashData ?? []).filter((r: any) => Number(r.balance_due ?? 0) > 0);
+    setCashToCollect({ count: cashRows.length, total: cashRows.reduce((sum: number, r: any) => sum + Number(r.balance_due ?? 0), 0) });
+
+    // Open airport pool jobs (same function the Airport Jobs screen uses).
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        console.error("Dashboard: no session token, skipping airport jobs count");
+      } else {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-pool-jobs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string },
+          body: JSON.stringify({}),
+        });
+        const json = await res.json();
+        if (!res.ok || json.error) {
+          console.error("Dashboard: list-pool-jobs failed:", res.status, json.error);
+          setOpenAirportJobs(null);
+        } else {
+          setOpenAirportJobs(Array.isArray(json.jobs) ? json.jobs.length : 0);
+        }
+      }
+    } catch (err) {
+      console.error("Dashboard: airport jobs count failed:", err);
+      setOpenAirportJobs(null);
+    }
+
     setLoading(false);
   }
 
@@ -319,14 +374,27 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
   const ridesTodayCount = todayBookings.filter((b) => b.status === "completed").length;
   const earningsToday = todayBookings.filter((b) => b.status === "completed").reduce((sum, b) => sum + Number(b.final_fare ?? b.estimated_fare ?? 0), 0);
   const milesToday = todayBookings.filter((b) => b.status === "completed").reduce((sum, b) => sum + Number(b.distance_km ?? 0), 0) * 0.621371;
-  const activeTrip = todayBookings.find((b) => ["en_route", "arrived", "in_progress"].includes(b.status)) ?? upcomingLater[0] ?? null;
+  const liveTrip = todayBookings.find((b) => ["en_route", "arrived", "in_progress"].includes(b.status)) ?? upcomingLater[0] ?? null;
   const nextUpcoming = todayBookings.filter((b) => b.status === "pending" || b.status === "confirmed").slice(0, 3);
+  // The hero card: a live trip first, then the next booking today, then the
+  // next one on a later day (view-only — you don't start a trip days early).
+  const activeTrip = liveTrip ?? nextUpcoming[0] ?? nextFuture ?? null;
+  const heroIsLive = liveTrip != null && activeTrip?.id === liveTrip.id;
+  const heroIsFutureDay = activeTrip != null && !heroIsLive && !todayBookings.some((b) => b.id === activeTrip.id);
 
-  const earningsDelta = yesterdayEarnings != null && yesterdayEarnings > 0 ? Math.round(((earningsToday - yesterdayEarnings) / yesterdayEarnings) * 100) : yesterdayEarnings === 0 && earningsToday > 0 ? 100 : null;
-  const ridesDelta = lastWeekSameDayCount != null ? ridesTodayCount - lastWeekSameDayCount : null;
+  // Only show a comparison when there is something real to compare against —
+  // "+100% vs yday" off a €0 day is noise, not information.
+  const earningsDelta = yesterdayEarnings != null && yesterdayEarnings > 0 ? Math.round(((earningsToday - yesterdayEarnings) / yesterdayEarnings) * 100) : null;
+  const ridesDelta = lastWeekSameDayCount != null && lastWeekSameDayCount > 0 ? ridesTodayCount - lastWeekSameDayCount : null;
+  const weekTotal = weeklyEarnings.reduce((sum, d) => sum + d.amount, 0);
+  const weekTrips = weeklyEarnings.reduce((sum, d) => sum + d.trips, 0);
 
   async function handleAdvanceStage() {
     if (!activeTrip) return;
+    if (heroIsFutureDay) {
+      console.error("Dashboard: refused to advance a booking that isn't today", activeTrip.id);
+      return;
+    }
     const currentRank = STATUS_ORDER[activeTrip.status] ?? -1;
     const nextStage = STAGES.find((s) => STATUS_ORDER[s.key] > currentRank);
     if (!nextStage) return;
@@ -476,9 +544,10 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
             </button>
           ) : (
             <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-medium text-[#8C8977]">Take a break:</span>
               {[15, 30, 60].map((m) => (
                 <button key={m} onClick={() => handleTakeBreak(m)} disabled={settingBreak} className="emboss-btn rounded-full px-2.5 py-1 text-[11px] font-medium text-[#5F5E5A] disabled:opacity-60">
-                  {m}m break
+                  {m} min
                 </button>
               ))}
             </div>
@@ -541,10 +610,6 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
         </div>
       )}
 
-      <div className="mb-5">
-        <ShareLinkCard driverId={driverId} />
-      </div>
-
       {/* Active Dispatch Center */}
       <div className="mb-5 rounded-2xl bg-white p-5 shadow-sm" style={{ border: "1px solid #ECE9E0" }}>
         {activeTrip ? (
@@ -558,7 +623,7 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
             >
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
                 <Circle size={8} fill="#185FA5" stroke="none" className="animate-pulse" />
-                Active Dispatch: {activeTrip.passenger_name.split(" ")[0]}
+                {heroIsLive ? "Active dispatch" : heroIsFutureDay ? "Next booking" : "Up next"}: {activeTrip.passenger_name.split(" ")[0]}
               </div>
               <div className="mb-4 space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-[#2C2C2A]"><span className="w-16 shrink-0 text-xs font-medium text-[#8C8977]">Passenger</span>{activeTrip.passenger_name}</div>
@@ -566,7 +631,12 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
                 <div className="flex items-start gap-2 text-[#2C2C2A]"><span className="w-16 shrink-0 text-xs font-medium text-[#8C8977]">Drop-off</span>{activeTrip.dropoff_address}</div>
                 <div className="flex items-center gap-2 text-[#2C2C2A]">
                   <span className="w-16 shrink-0 text-xs font-medium text-[#8C8977]">Status</span>
-                  <span className="flex items-center gap-1"><Clock size={12} /> {stageStatusLabel(activeTrip)}</span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={12} />{" "}
+                    {heroIsFutureDay
+                      ? new Date(activeTrip.scheduled_time).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+                      : stageStatusLabel(activeTrip)}
+                  </span>
                 </div>
               </div>
               <div>
@@ -602,7 +672,14 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
                 <button onClick={() => handleNavigate(activeTrip)} className="emboss-btn flex flex-col items-center gap-1 rounded-xl py-3 text-[11px] font-semibold text-[#5F5E5A]">
                   <Navigation2 size={15} /> Navigate
                 </button>
-                {nextStage ? (
+                {heroIsFutureDay ? (
+                  <button
+                    onClick={() => onOpenBooking?.(activeTrip.id)}
+                    className="emboss-btn-primary flex flex-col items-center gap-1 rounded-xl py-3 text-[11px] font-semibold text-white"
+                  >
+                    <CalendarClock size={15} /> View booking
+                  </button>
+                ) : nextStage ? (
                   <button
                     onClick={handleAdvanceStage}
                     disabled={advancingStage}
@@ -622,11 +699,35 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
             <Car size={26} color="#B4B2A9" />
-            <div className="text-sm font-medium text-[#5F5E5A]">No active trip right now</div>
-            <div className="text-xs text-[#8C8977]">A live dispatch will appear here the moment a trip is confirmed.</div>
+            <div className="text-sm font-medium text-[#5F5E5A]">Nothing booked</div>
+            <div className="text-xs text-[#8C8977]">
+              {online ? "You're online — new bookings appear here the moment they come in." : "You're offline — go online to receive bookings."}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Needs your attention — only shows things that are actually true
+          right now, each one tappable. */}
+      {(unviewedCount > 0 || cashToCollect.count > 0 || (online && openAirportJobs != null && openAirportJobs > 0)) && (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {unviewedCount > 0 && (
+            <button onClick={() => onNavigate?.("bookings")} className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+              <Bell size={13} /> {unviewedCount} new booking{unviewedCount === 1 ? "" : "s"} to review <ChevronRight size={12} />
+            </button>
+          )}
+          {cashToCollect.count > 0 && (
+            <button onClick={() => onNavigate?.("bookings")} className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold" style={{ background: "#FAEEDA", color: "#633806" }}>
+              <Wallet size={13} /> €{cashToCollect.total.toFixed(2)} cash to collect ({cashToCollect.count} trip{cashToCollect.count === 1 ? "" : "s"}) <ChevronRight size={12} />
+            </button>
+          )}
+          {online && openAirportJobs != null && openAirportJobs > 0 && (
+            <button onClick={() => onNavigate?.("pool-jobs")} className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold" style={{ background: "#E6F1FB", color: "#0C447C" }}>
+              <Plane size={13} /> {openAirportJobs} airport job{openAirportJobs === 1 ? "" : "s"} open now <ChevronRight size={12} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Today's stats — one compact row, matching the reference's
           layout, same real numbers as before (today's earnings, rides
@@ -644,8 +745,9 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
           <TrendBadge value={earningsDelta} suffix="% vs yday" color="green" />
         </div>
         <div className="px-2 text-center sm:px-4">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#8C8977]">Miles today</div>
-          <div className="text-lg font-bold text-[#2C2C2A] sm:text-xl" style={{ fontFamily: "'Space Grotesk'" }}>{milesToday.toFixed(1)}</div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#8C8977]">Last 7 days</div>
+          <div className="text-lg font-bold text-[#2C2C2A] sm:text-xl" style={{ fontFamily: "'Space Grotesk'" }}>€{weekTotal}</div>
+          <div className="text-[11px] text-[#8C8977]">{weekTrips} ride{weekTrips === 1 ? "" : "s"} · {milesToday.toFixed(1)} mi today</div>
         </div>
       </div>
 
@@ -662,19 +764,21 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E4E2DA" }}
                   formatter={(value: any, _name: any, item: any) => [`€${value} · ${item?.payload?.trips ?? 0} rides`, item?.payload?.day]}
                 />
-                <Bar dataKey="amount" fill="#185FA5" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="amount" fill="#185FA5" radius={[6, 6, 0, 0]}>
+                  <LabelList dataKey="amount" position="top" formatter={(v: any) => (Number(v) > 0 ? `€${v}` : "")} style={{ fontSize: 11, fill: "#5F5E5A" }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-sm lg:col-span-2" style={{ border: "1px solid #ECE9E0" }}>
-          <div className="mb-3 text-sm font-semibold text-[#2C2C2A]">Today's itinerary</div>
-          {nextUpcoming.length === 0 ? (
-            <div className="py-8 text-center text-xs text-[#8C8977]">No upcoming bookings today.</div>
+          <div className="mb-3 text-sm font-semibold text-[#2C2C2A]">Later today</div>
+          {nextUpcoming.filter((b) => b.id !== activeTrip?.id).length === 0 ? (
+            <div className="py-8 text-center text-xs text-[#8C8977]">No other bookings today.</div>
           ) : (
             <div className="space-y-2.5">
-              {nextUpcoming.map((b) => (
+              {nextUpcoming.filter((b) => b.id !== activeTrip?.id).map((b) => (
                 <div key={b.id} className="flex items-center justify-between gap-2 rounded-xl p-3" style={{ background: "#F8FAFC" }}>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -712,6 +816,11 @@ export default function OverviewDashboard({ driverId, onNavigate, onOpenBooking 
             </div>
           )}
         </div>
+      </div>
+
+      {/* Get more bookings — the QR / link tools, compact. */}
+      <div className="mt-5">
+        <ShareLinkCard driverId={driverId} compact />
       </div>
     </div>
   );
