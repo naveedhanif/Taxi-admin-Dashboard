@@ -628,15 +628,6 @@ export default function App() {
               </>
             )}
 
-            <button
-              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              className="emboss-btn flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#5F5E5A] cursor-pointer"
-              aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-              title={theme === "dark" ? "Light theme" : "Dark theme"}
-            >
-              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-            </button>
-
             {driverId && (
               <button
                 onClick={handleLogout}
@@ -723,7 +714,7 @@ export default function App() {
                 />
               )}
               <aside
-                className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 transform p-3 transition-all duration-200 ease-out lg:sticky lg:top-[57px] lg:z-0 lg:h-[calc(100vh-57px)] lg:translate-x-0 ${
+                className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 transform flex-col p-3 transition-all duration-200 ease-out lg:sticky lg:top-[57px] lg:z-0 lg:h-[calc(100vh-57px)] lg:translate-x-0 ${
                   sidebarOpen ? "translate-x-0" : "-translate-x-full"
                 } ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"}`}
                 style={{
@@ -780,6 +771,27 @@ export default function App() {
                     );
                   })}
                 </nav>
+
+                {/* Theme toggle lives here, at the bottom of the menu, well
+                    away from Log out (it used to sit next to it in the top
+                    bar and was easy to hit by mistake). */}
+                <button
+                  onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                  title={sidebarCollapsed ? (theme === "dark" ? "Light theme" : "Dark theme") : undefined}
+                  aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+                  className={`mt-auto flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-medium text-[#9CA3B5] hover:text-white cursor-pointer text-left ${
+                    sidebarCollapsed ? "lg:justify-center lg:px-0" : ""
+                  }`}
+                  style={{ background: "#16213A", boxShadow: "2px 3px 6px rgba(0,0,0,0.35), -1px -1px 3px rgba(255,255,255,0.03)", marginBottom: "max(0px, env(safe-area-inset-bottom))" }}
+                >
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px]"
+                    style={{ background: "rgba(255,255,255,0.06)", boxShadow: "inset 1px 1px 2px rgba(0,0,0,0.3), inset -1px -1px 1px rgba(255,255,255,0.06)" }}
+                  >
+                    {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                  </span>
+                  <span className={sidebarCollapsed ? "lg:hidden" : ""}>{theme === "dark" ? "Light theme" : "Dark theme"}</span>
+                </button>
               </aside>
             </>
           )}
