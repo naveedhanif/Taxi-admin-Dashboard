@@ -28,29 +28,43 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// Take over immediately when this file changes, so a fix to the tap handling
+// doesn't wait for every old copy of the app to be closed.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = event.notification.data?.url || "/";
 
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+    (async () => {
+      // Backup channel for iOS (see the comment in App.tsx): remember where
+      // this tap should go; the app reads it back when it starts / resumes.
+      try {
+        const cache = await caches.open("pending-nav");
+        await cache.put("/__pending_nav", new Response(JSON.stringify({ url: targetUrl, at: Date.now() })));
+      } catch (err) {
+        console.error("sw: couldn't store the pending navigation:", err);
+      }
+
+      const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const client of windowClients) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
-          // WindowClient.navigate() on an already-open tab is known to
-          // be unreliable specifically on iOS Safari PWAs — it can
-          // silently fail, after which the old code still focused the
-          // window anyway, landing on whatever screen was already
-          // open (almost always the dashboard). postMessage instead:
-          // the already-running React app listens for this and
-          // navigates itself directly, which doesn't depend on that
-          // browser API working at all.
+          // WindowClient.navigate() is unreliable on iOS PWAs; postMessage
+          // the running app instead (the cache entry above is the fallback).
           if ("postMessage" in client) {
             client.postMessage({ type: "NOTIFICATION_NAVIGATE", url: targetUrl });
           }
-          return client.focus();
+          try {
+            return await client.focus();
+          } catch (err) {
+            console.error("sw: client.focus() failed:", err);
+            return;
+          }
         }
       }
       if (clients.openWindow) return clients.openWindow(targetUrl);
-    })
+    })()
   );
 });

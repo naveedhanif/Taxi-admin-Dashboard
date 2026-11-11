@@ -144,22 +144,69 @@ export default function App() {
   // directly — reliable because it's just normal JS execution, not a
   // browser API with inconsistent support.
   useEffect(() => {
-    function handleServiceWorkerMessage(event: MessageEvent) {
-      if (event.data?.type === "NOTIFICATION_NAVIGATE" && event.data.url) {
-        const url = new URL(event.data.url, window.location.origin);
-        window.history.pushState(null, "", url.pathname + url.search);
-        setCurrentPath(url.pathname);
-        setDashboardScreen(screenFromPath(url.pathname));
-        // A chat-message push points at /bookings?booking=<id>&open=chat
-        const bookingParam = url.searchParams.get("booking");
-        if (url.pathname.startsWith("/bookings") && bookingParam) {
-          setOpenChatWithBooking(url.searchParams.get("open") === "chat");
-          setOpenBookingId(bookingParam);
-        }
+    function applyNotificationUrl(rawUrl: string) {
+      const url = new URL(rawUrl, window.location.origin);
+      window.history.pushState(null, "", url.pathname + url.search);
+      setCurrentPath(url.pathname);
+      setDashboardScreen(screenFromPath(url.pathname));
+      // A chat-message push points at /bookings?booking=<id>&open=chat
+      const bookingParam = url.searchParams.get("booking");
+      if (url.pathname.startsWith("/bookings") && bookingParam) {
+        setOpenChatWithBooking(url.searchParams.get("open") === "chat");
+        setOpenBookingId(bookingParam);
       }
     }
+
+    // iOS home-screen apps don't reliably deliver the service worker's
+    // postMessage, and clients.openWindow(url) often just opens the app at
+    // its start page. So the worker ALSO leaves the tapped notification's
+    // target in the Cache API; we read it back whenever the app starts or
+    // comes to the front, and only if it's fresh (a stale one must never
+    // reopen a chat later). Consumed once.
+    async function consumePendingNavigation() {
+      try {
+        if (!("caches" in window)) return;
+        const cache = await caches.open("pending-nav");
+        const hit = await cache.match("/__pending_nav");
+        if (!hit) return;
+        await cache.delete("/__pending_nav");
+        const pending = (await hit.json()) as { url?: string; at?: number };
+        if (!pending.url || typeof pending.at !== "number") {
+          console.error("pending-nav entry was malformed — ignoring it.", pending);
+          return;
+        }
+        if (Date.now() - pending.at > 2 * 60 * 1000) {
+          console.error("pending-nav entry was older than 2 minutes — ignoring it.");
+          return;
+        }
+        applyNotificationUrl(pending.url);
+      } catch (err) {
+        console.error("Couldn't read the pending notification target:", err);
+      }
+    }
+
+    function handleServiceWorkerMessage(event: MessageEvent) {
+      if (event.data?.type === "NOTIFICATION_NAVIGATE" && event.data.url) {
+        applyNotificationUrl(event.data.url);
+        // Already handled via postMessage — drop the backup copy.
+        caches?.open("pending-nav").then((c) => c.delete("/__pending_nav")).catch(() => {});
+      }
+    }
+    function handleVisible() {
+      if (document.visibilityState === "visible") consumePendingNavigation();
+    }
+
     navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
-    return () => navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
+    document.addEventListener("visibilitychange", handleVisible);
+    window.addEventListener("focus", consumePendingNavigation);
+    window.addEventListener("pageshow", consumePendingNavigation);
+    consumePendingNavigation();
+    return () => {
+      navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.removeEventListener("focus", consumePendingNavigation);
+      window.removeEventListener("pageshow", consumePendingNavigation);
+    };
   }, []);
 
   // Real session tracking. onAuthStateChange fires immediately with the
