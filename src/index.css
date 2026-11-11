@@ -128,3 +128,6 @@ html[data-theme="dark"] .mapboxgl-map {
   background-color: #F0EEE7;
 }
 .date-field::-webkit-date-and-time-value { text-align: left; min-height: 1.2em; }
+
+.date-hint { display: none; }
+@media (pointer: coarse) { .date-hint { display: block; } }

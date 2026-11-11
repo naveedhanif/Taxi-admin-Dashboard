@@ -917,9 +917,9 @@ export default function AllBookingsScreen({
                     className="emboss-input date-field text-[#2C2C2A]"
                     aria-label={`${field.label} date`}
                   />
-                  {/* iOS renders an empty date input as a blank box — show a hint. */}
+                  {/* iOS renders an empty date input as a blank box — show a hint (touch devices only; desktop browsers show their own dd/mm/yyyy). */}
                   {!field.value && (
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#8C8977]">Select date</span>
+                    <span className="date-hint pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#8C8977]">Select date</span>
                   )}
                 </div>
               </div>
