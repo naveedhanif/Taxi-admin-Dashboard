@@ -29,6 +29,8 @@ import {
   Compass,
   LogIn,
   LogOut,
+  Moon,
+  Sun,
   Calendar,
   Settings as SettingsIcon,
   TrendingUp,
@@ -87,6 +89,25 @@ export default function App() {
   // Mobile: drawer is closed by default, opened via hamburger.
   // Desktop: sidebar is open by default, collapsible via the same toggle.
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Dark theme: a simple light/dark toggle, remembered per device. The
+  // actual restyling is the `html[data-theme="dark"]` block in index.css.
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      return localStorage.getItem("taxi_admin_theme") === "dark" ? "dark" : "light";
+    } catch (err) {
+      console.error("Couldn't read saved theme:", err);
+      return "light";
+    }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("taxi_admin_theme", theme);
+    } catch (err) {
+      console.error("Couldn't save theme:", err);
+    }
+  }, [theme]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Lifted from AllBookingsScreen specifically so the bottom nav bar
   // can hide itself while chat is open — both are fixed-position
@@ -606,6 +627,15 @@ export default function App() {
                 </button>
               </>
             )}
+
+            <button
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              className="emboss-btn flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#5F5E5A] cursor-pointer"
+              aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              title={theme === "dark" ? "Light theme" : "Dark theme"}
+            >
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
 
             {driverId && (
               <button

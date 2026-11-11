@@ -86,3 +86,23 @@ html {
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
+
+
+/* ---- Dark theme ----
+   This app's colours are hard-coded hex values across ~100 places, so the
+   dark theme inverts the whole page (invert + hue-rotate keeps blues blue,
+   greens green) and then flips back everything that must keep its real
+   colours: the already-dark sidebar, images (QR codes, avatars, map
+   previews), maps and video. Toggled by <html data-theme="dark">. */
+html[data-theme="dark"] {
+  filter: invert(1) hue-rotate(180deg);
+  background: #F7F7F5;
+}
+html[data-theme="dark"] img,
+html[data-theme="dark"] video,
+html[data-theme="dark"] canvas,
+html[data-theme="dark"] iframe,
+html[data-theme="dark"] aside,
+html[data-theme="dark"] .mapboxgl-map {
+  filter: invert(1) hue-rotate(180deg);
+}
