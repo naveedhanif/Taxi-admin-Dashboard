@@ -8,10 +8,10 @@ interface StepProgressIndicatorProps {
 
 const steps = [
   { step: 1, title: "Business" },
-  { step: 2, title: "Stripe Connect" },
-  { step: 3, title: "Subscription" },
-  { step: 4, title: "Vehicle" },
-  { step: 5, title: "Fare Rules" },
+  { step: 2, title: "Subscription" },
+  { step: 3, title: "Vehicle" },
+  { step: 4, title: "Fare Rules" },
+  { step: 5, title: "Licence" },
 ];
 
 export default function StepProgressIndicator({

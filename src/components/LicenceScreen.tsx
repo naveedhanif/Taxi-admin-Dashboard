@@ -108,7 +108,11 @@ export default function LicenceScreen({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!driverId) return;
+    if (!driverId) {
+      console.error("LicenceScreen: no driverId — cannot save licence");
+      setErrorMessage("We couldn't find your account. Sign in and try again.");
+      return;
+    }
     if (!licencePhotoUrl) {
       setErrorMessage("Please upload a photo of your licence card or disc before saving — it's what lets an owner actually verify this against the number, rather than just trusting text.");
       return;
@@ -176,7 +180,7 @@ export default function LicenceScreen({
       <div className="mb-6">
         {onboarding && (
           <span className="mb-1 inline-block rounded-full bg-[#EAF3DE] px-2.5 py-0.5 text-[11px] font-semibold text-[#27500A]">
-            Step 6 of 6
+            Step 5 of 5
           </span>
         )}
         <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
@@ -298,7 +302,7 @@ export default function LicenceScreen({
                 onClick={onNext}
                 className="emboss-btn-primary flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white cursor-pointer"
               >
-                Continue to dashboard
+                Finish registration
               </button>
               <button
                 type="button"

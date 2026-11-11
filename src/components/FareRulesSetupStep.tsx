@@ -71,7 +71,11 @@ export default function FareRulesSetupStep({ driverId, onComplete }: FareRulesSe
   const [errorMessage, setErrorMessage] = useState("");
 
   async function handleContinue() {
-    if (!driverId) return;
+    if (!driverId) {
+      console.error("FareRulesSetupStep: no driverId — sign-up step did not complete");
+      setErrorMessage("We couldn't find your account. Go back to step 1 or sign in, then try again.");
+      return;
+    }
     setSaving(true);
     setErrorMessage("");
     try {
@@ -118,7 +122,7 @@ export default function FareRulesSetupStep({ driverId, onComplete }: FareRulesSe
           <>
             <div className="mb-5">
               <div className="mb-1 flex items-center gap-2">
-                <span className="rounded-full bg-[#EAF3DE] px-2.5 py-0.5 text-[11px] font-semibold text-[#27500A]">Step 5 of 6</span>
+                <span className="rounded-full bg-[#EAF3DE] px-2.5 py-0.5 text-[11px] font-semibold text-[#27500A]">Step 4 of 5</span>
               </div>
               <h1 className="text-2xl text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
                 Your fares
@@ -151,7 +155,7 @@ export default function FareRulesSetupStep({ driverId, onComplete }: FareRulesSe
 
             <button
               onClick={handleContinue}
-              disabled={saving || !driverId}
+              disabled={saving}
               className="emboss-btn-primary flex w-full items-center justify-center gap-2 rounded-full py-3 text-xs font-semibold uppercase tracking-wider text-white cursor-pointer disabled:opacity-60"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Euro size={14} />}

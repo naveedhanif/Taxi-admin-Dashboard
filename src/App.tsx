@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import StepProgressIndicator from "./components/StepProgressIndicator";
 import BusinessDetailsStep from "./components/BusinessDetailsStep";
-import StripeConnectStep from "./components/StripeConnectStep";
 import SubscriptionPlanStep from "./components/SubscriptionPlanStep";
 import VehicleSetupStep from "./components/VehicleSetupStep";
 import FareRulesSetupStep from "./components/FareRulesSetupStep";
@@ -235,6 +234,8 @@ export default function App() {
   // is the one source of truth for "who's logged in right now."
   const [driverId, setDriverId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
+  // false = waiting for owner approval (or suspended); null = unknown yet.
+  const [isApproved, setIsApproved] = useState<boolean | null>(null);
   // Whether the driver has manually marked themselves as taking bookings
   // today — a completely separate concept from "busy right now" (which
   // is derived automatically from having an active trip). Requires a
@@ -276,22 +277,47 @@ export default function App() {
 
           const { data } = await supabase
             .from("drivers")
-            .select("business_name, is_online")
+            .select("business_name, is_online, is_active")
             .eq("id", result.driverId)
             .single();
           setBusinessName(data?.business_name ?? null);
+          setIsApproved(data?.is_active ?? null);
           setIsOnline(data?.is_online ?? true);
         }
       } else {
         driverIdRef.current = null;
         setDriverId(null);
         setBusinessName(null);
+        setIsApproved(null);
       }
       setSessionChecked(true);
     });
 
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  // Approval status also has to load for a driver who just finished
+  // registration (the auth listener may have run before their row existed).
+  useEffect(() => {
+    if (!driverId) return;
+    let cancelled = false;
+    supabase
+      .from("drivers")
+      .select("is_active")
+      .eq("id", driverId)
+      .single()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Could not load approval status:", error.message);
+          return;
+        }
+        setIsApproved(data?.is_active ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [driverId]);
 
   const { notifications, dismiss, unviewedCount, audioRef, refreshUnviewedCount } = useNewBookingNotifications(driverId);
 
@@ -614,7 +640,7 @@ export default function App() {
                   }`}
                 >
                   <Compass size={13} />
-                  <span className="hidden sm:inline">Onboarding Flow (Steps 1-5)</span>
+                  <span className="hidden sm:inline">Onboarding Flow</span>
                   <span className="sm:hidden">Onboarding</span>
                 </button>
 
@@ -660,45 +686,68 @@ export default function App() {
               </button>
             </div>
 
-            <StepProgressIndicator
-              currentStep={onboardingStep}
-              onStepClick={(step) => setOnboardingStep(step)}
-            />
+            {onboardingStep <= 5 && (
+              <StepProgressIndicator
+                currentStep={onboardingStep}
+                onStepClick={(step) => setOnboardingStep(step)}
+              />
+            )}
 
             {onboardingStep === 1 && (
-              <BusinessDetailsStep onNext={() => setOnboardingStep(2)} />
+              <BusinessDetailsStep
+                onNext={({ driverId: newDriverId }) => {
+                  // The auth listener can fire before the drivers row exists
+                  // (signup-driver hasn't finished), leaving driverId null —
+                  // which silently disabled the later steps. Use the id the
+                  // sign-up call itself returned.
+                  driverIdRef.current = newDriverId;
+                  setDriverId(newDriverId);
+                  setOnboardingStep(2);
+                }}
+              />
             )}
             {onboardingStep === 2 && (
-              <StripeConnectStep
-                onNext={() => setOnboardingStep(3)}
-                onSkip={() => setOnboardingStep(3)}
-              />
+              <SubscriptionPlanStep onNext={() => setOnboardingStep(3)} />
             )}
             {onboardingStep === 3 && (
-              <SubscriptionPlanStep onNext={() => setOnboardingStep(4)} />
-            )}
-            {onboardingStep === 4 && (
               <VehicleSetupStep
-                onNext={() => setOnboardingStep(5)}
-                onSkip={() => setOnboardingStep(5)}
+                onNext={() => setOnboardingStep(4)}
+                onSkip={() => setOnboardingStep(4)}
               />
             )}
-            {onboardingStep === 5 && (
-              <FareRulesSetupStep driverId={driverId} onComplete={() => setOnboardingStep(6)} />
+            {onboardingStep === 4 && (
+              <FareRulesSetupStep driverId={driverId} onComplete={() => setOnboardingStep(5)} />
             )}
-            {onboardingStep === 6 && (
+            {onboardingStep === 5 && (
               <LicenceScreen
                 driverId={driverId}
                 onboarding
-                onNext={() => {
-                  setViewMode("dashboard");
-                  setDashboardScreen("overview");
-                }}
-                onSkip={() => {
-                  setViewMode("dashboard");
-                  setDashboardScreen("overview");
-                }}
+                onNext={() => setOnboardingStep(6)}
+                onSkip={() => setOnboardingStep(6)}
               />
+            )}
+            {onboardingStep === 6 && (
+              <div className="mx-auto w-full max-w-lg rounded-2xl border border-[#ECE9E0] bg-[#FBFAF6] p-8 text-center">
+                <div className="text-2xl font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+                  Registration complete
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-[#5F5E5A]">
+                  Thank you. The app owner will review your details and approve your account. Once approved, your booking link goes live and customers can book you. You can look around your dashboard in the meantime.
+                </p>
+                <p className="mt-3 text-xs leading-relaxed text-[#8C8977]">
+                  Taking card payments is optional. You can connect Stripe any time from Settings, then the Stripe tab.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode("dashboard");
+                    setDashboardScreen("overview");
+                  }}
+                  className="emboss-btn-primary mt-6 rounded-full px-6 py-3 text-xs font-semibold uppercase tracking-wider text-white cursor-pointer"
+                >
+                  Go to my dashboard
+                </button>
+              </div>
             )}
           </div>
         </main>
@@ -797,6 +846,14 @@ export default function App() {
           )}
 
           <main className="min-w-0 flex-1 py-4 pb-24 sm:py-6 sm:pb-6">
+            {isApproved === false && (
+              <div className="mx-4 mb-4 rounded-xl border border-[#F0D9A8] bg-[#FFF6E0] p-4 text-sm text-[#6B4E0A] sm:mx-6">
+                <div className="font-semibold">Waiting for approval</div>
+                <div className="mt-1 text-xs leading-relaxed">
+                  The app owner needs to approve your account before your booking link goes live and customers can book you. You can set up your profile, vehicle and fares in the meantime.
+                </div>
+              </div>
+            )}
             {locationShareState !== "idle" && (
               <div className="mb-3 px-3 sm:px-6">
                 <div
